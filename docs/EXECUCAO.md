@@ -131,3 +131,12 @@ As três falhas previstas na seção de I09 foram aplicadas uma de cada vez em c
 Uma prova HTTP adicional reiniciou o processo da API usando o mesmo SQLite depois de cadastrar Employee por HTTP e criar Draft com valor 25,501. Após o reinício, novo login com as credenciais existentes funcionou e as respostas de despesa/histórico ficaram idênticas. A senha Admin existente continuou válida mesmo com outra senha de bootstrap no segundo início. O banco manteve dois usuários (Admin e Employee HTTP), uma atribuição Admin e cinco roles. A prova externa registrou somente resultados; não persistiu credenciais ou bearer.
 
 A última revalidação read-only confirmou PRs #2–#14 abertas, controles originais intactos, workflows do candidato completed/success e main ainda no merge de planejamento ec3955913abdc6f772f1c31d871771d8fe551708. Estas evidências adicionais não representam integração na main nem participação de outros autores.
+
+
+## Correlação de erros e preparação do cadastro
+
+A auditoria encontrou traceIds diferentes entre os erros nativos 401/403 e o RequestAuditMiddleware: o writer padrão já havia preenchido um identificador de Activity, preservado pelo TryAdd. O Customizer passou a atribuir HttpContext.TraceIdentifier, o mesmo valor do log de auditoria. O build passou sem warnings. Oito casos HTTP confirmaram traceId e status correspondentes no log: anonimato, bearer inválido, role negada no middleware, entrada inválida, rota ausente, despesa invisível, estado repetido e falha SQLite controlada. Cobrem 400, 401, 403, 404, 409 e 500; não foi incluído payload secreto no relatório. A falha do provider foi provocada somente no banco descartável externo.
+
+Após identificar o login de André, foram criados convites GitHub de escrita para imneli e andrenakarocha, com HTTP 201 e estado pending. Ainda aguardam aceite e contribuições próprias. Permissões de Admin/maintain não foram concedidas. A main continua aguardando aprovação de integração.
+
+O formulário fornecido foi aberto em Chromium e continua exibindo 11 campos e Submit habilitado, apesar da data de encerramento anunciada. Rascunho validado: grupo ExpenseHub, nomes completos/RMs da equipe, URLs dos três perfis e URL do repositório público do grupo. Nenhuma resposta foi enviada. A interface não permite conferir respostas anteriores; foi solicitada confirmação de cadastro existente antes de novo envio.

@@ -29,7 +29,7 @@ A referência inspecionada é o [template original](https://github.com/Racass/ch
 - O template contém API `net10.0`, MSTest 4.0.2, `/health` e OpenAPI. Domínio, persistência, Identity e testes funcionais ainda precisam ser implementados.
 - A base de conhecimento contém somente seu README; nenhum fato ou runbook aplicável foi encontrado.
 - Entrega: **13/10/2026**, conforme o [enunciado](https://github.com/Racass/checkpoint-csharpracass-expensehub/blob/main/docs/ENUNCIADO.md). Horário não informado; proposta: concluir em 12/10.
-- Cadastro do grupo: o anúncio informa encerramento em **30/09/2026**. O Forms responde por HTTP, mas não foi possível confirmar pela interface se aceita respostas. Nenhuma resposta foi enviada. Confirmar registro existente ou regularizar a situação com o professor.
+- Cadastro do grupo: o anúncio informa encerramento em **30/09/2026**. Em 03/10, Chromium confirmou o formulário aberto com 11 campos e botão Submit habilitado. Foi preparado um rascunho ExpenseHub com a equipe e o repositório, sem envio. Falta confirmar se já existe cadastro antes de enviar uma nova resposta; se necessário, regularizar a situação com o professor.
 
 ### Ambiente e verificações realizadas
 
@@ -483,7 +483,7 @@ Autoria do commit e autenticação do push são diferentes. Nome/e-mail não aut
 
 A [divisão detalhada](DIVISAO-TRABALHO.md) distribui 24 pacotes, oito e 40 unidades de esforço por integrante. João conduz fundação, Identity, envio, infraestrutura de erro e CI; Matheus conduz roles, Draft, consultas/histórico e Scalar; André conduz domínio, autorização, decisões/pagamento e demo HTTP. Os três implementam testes unitários, provas SQLite, documentação e validação final, com revisão cruzada.
 
-Cada aluno registra os próprios commits, sem trailers `Co-authored-by`, conforme solicitado. O plano prevê oito marcos de evolução por pessoa, sem transformar a contagem em quota ou fragmentar mudanças artificialmente. Na entrega, conferir pelo menos dois commits reais por integrante na `main`, associação dos três e-mails às contas GitHub e preservação da autoria nos merges. Nomes, RMs, e-mails informados e o login pendente de André constam no documento de divisão.
+Cada aluno registra os próprios commits, sem trailers `Co-authored-by`, conforme solicitado. O plano prevê oito marcos de evolução por pessoa, sem transformar a contagem em quota ou fragmentar mudanças artificialmente. Na entrega, conferir pelo menos dois commits reais por integrante na `main`, associação dos três e-mails às contas GitHub e preservação da autoria nos merges. Nomes, RMs, e-mails informados e os três logins identificados constam no documento de divisão.
 
 ## Cronograma proposto
 

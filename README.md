@@ -69,7 +69,7 @@ Employee lê todas as próprias despesas. Approver lê Submitted. Finance lê Ap
 
 Histórico usa revisão crescente e registra criação, edição efetiva e transições, com ator e UTC. Edição idêntica retorna 200 sem revisão/evento novos. Paid e Rejected são finais. Repetir transição retorna 409, mesmo quando o Approver perdeu a leitura do recurso após decidir. Alteração, evento e pagamento são persistidos no mesmo SaveChanges. Índices únicos protegem histórico por revisão e pagamento por despesa.
 
-Erros usam ProblemDetails com code e traceId: 400 entrada inválida, 401 credencial ausente/inválida, 403 sem permissão, 404 ausente/invisível na leitura, 409 estado incompatível ou concorrência. Falhas inesperadas de provider continuam 500; somente conflitos conhecidos são traduzidos para 409.
+Erros usam ProblemDetails com code e traceId: 400 entrada inválida, 401 credencial ausente/inválida, 403 sem permissão, 404 ausente/invisível na leitura, 409 estado incompatível ou concorrência. Falhas inesperadas de provider continuam 500; somente conflitos conhecidos são traduzidos para 409. O traceId da resposta coincide com o identificador registrado no log de auditoria da requisição.
 
 ## Referência interativa
 

@@ -44,7 +44,7 @@ internal static class Program
         builder.Services.AddExceptionHandler<ApiExceptionHandler>();
         builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
         {
-            context.ProblemDetails.Extensions.TryAdd("traceId", context.HttpContext.TraceIdentifier);
+            context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
             context.ProblemDetails.Extensions.TryAdd("code", context.ProblemDetails.Status switch
             {
                 400 => "request.invalid",
