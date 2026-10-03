@@ -1,6 +1,8 @@
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using ExpenseHub.Api.Contracts.Requests;
+using ExpenseHub.Api.Contracts.Responses;
 using ExpenseHub.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -26,6 +28,7 @@ public sealed class AdminUsersController : ControllerBase
     /// <param name="cancellationToken">Request cancellation.</param>
     /// <returns>The authorized account views.</returns>
     [HttpGet]
+    [ProducesResponseType<IReadOnlyList<UserResponse>>(200)]
     public async Task<IActionResult> List(CancellationToken cancellationToken)
         => Ok(await _service.ListAsync(CurrentActor.FromPrincipal(User), cancellationToken));
 
@@ -35,6 +38,7 @@ public sealed class AdminUsersController : ControllerBase
     /// <param name="cancellationToken">Request cancellation.</param>
     /// <returns>No content after the atomic update.</returns>
     [HttpPut("{id}/roles")]
+    [ProducesResponseType(204)]
     public async Task<IActionResult> Replace(string id, UpdateUserRolesRequest request, CancellationToken cancellationToken)
     {
         await _service.ReplaceAsync(CurrentActor.FromPrincipal(User), id, request, cancellationToken);

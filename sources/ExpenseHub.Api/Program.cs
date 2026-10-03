@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using ExpenseHub.Api.Documentation;
 using ExpenseHub.Api.Infrastructure;
 using ExpenseHub.Api.Persistence;
 using ExpenseHub.Api.Services;
@@ -13,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Scalar.AspNetCore;
 
 namespace ExpenseHub.Api;
 
@@ -21,7 +23,7 @@ internal static class Program
     public static async Task Main(string[] args)
     {
         WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
-        builder.Services.AddOpenApi();
+        builder.Services.AddOpenApi(ApiDocumentation.Configure);
         builder.Services.AddDbContext<ExpenseHubDbContext>(options => options.UseSqlite(
             builder.Configuration.GetConnectionString("ExpenseHub") ?? "Data Source=expensehub.db"));
 
@@ -89,6 +91,7 @@ internal static class Program
         if (app.Environment.IsDevelopment())
         {
             app.MapOpenApi();
+            app.MapScalarApiReference("/docs", options => options.WithTitle("ExpenseHub API").DisableAgent());
         }
 
         app.MapGet("/health", () => Results.Ok(new { status = "ok" }))

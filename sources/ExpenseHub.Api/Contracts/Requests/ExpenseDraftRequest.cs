@@ -18,6 +18,7 @@ public sealed class ExpenseDraftRequest
     }
 
     /// <summary>Gets or sets the single exact amount within the required bounds.</summary>
+    [Required]
     [Range(typeof(decimal), "0.01", "2147483647", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)]
     public decimal Amount { get; set; }
 

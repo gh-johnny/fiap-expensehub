@@ -45,9 +45,10 @@ A conta autenticada nesta sessão é João. Os commits usam sua configuração r
 | I07 — decisões | [PR #8](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/8), SHA fc21f19; CI score 100, zero findings/warnings; 40 verificações HTTP. |
 | I08 — pagamento/histórico | [PR #9](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/9), SHA a1ab905; CI score 100, zero findings; 65 verificações HTTP e rollback real. |
 | I09 — unitários próprios | [PR #10](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/10), SHA 6ea57f9; 111 testes; CI score 100, zero findings/warnings. |
-| M01 — integração SQLite | Oito testes passaram; formatação LINQ ajustada antes do commit. Provas adicionais, separadas dos unitários de I09. |
+| M01 — integração SQLite | [PR #11](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/11), SHA 30bbd4b; oito testes; CI score 100, zero findings/warnings. |
 | I10 — qualidade final | Pendente do SHA final integrado na main. |
-| Scalar e demo automatizada | Ainda não implementados. |
+| M02 — Scalar/OpenAPI | Implementado; build sem warnings, 65 verificações HTTP e provas adicionais de schemas; Chromium executou login e consulta protegida com 200. |
+| M03 — demo automatizada/CI adicional | Ainda não implementado. |
 | Participação individual dos três | Pendente de contribuições próprias de Matheus e André. |
 
 ## Evidências da fundação
@@ -96,3 +97,12 @@ Unitários: 111 testes passaram sem warnings. Duas alterações temporárias em 
 Integração: oito testes MSTest em projeto separado, com SQLite em arquivo exclusivo, Pooling=False, migrations reais e contextos novos para conferir resultados. Cobrem seed de um Admin/cinco roles, decimal máximo/DateOnly/UTC, projeções sem tracking e escopo SQL, FK não convertida indevidamente em 409, pagamento único, revisão desatualizada em dois contextos e rollback após falhas de histórico, pagamento e substituição de roles. As injeções de falha existem somente nos fixtures. Usuários adicionais nesses testes são dados de fixture; a API de demonstração os cria por HTTP.
 
 Os relatórios de I05 e I06 conservaram três warnings de imports. O [CI de I07](https://github.com/gh-johnny/checkpoint-expensehub-fiap/actions/runs/37099216907) confirma a correção com zero findings/warnings no SHA fc21f195e79523a14b6b8e77d1edd768973084a2. Os [CIs de I08](https://github.com/gh-johnny/checkpoint-expensehub-fiap/actions/runs/37099585828) e [I09](https://github.com/gh-johnny/checkpoint-expensehub-fiap/actions/runs/37099777114) também passaram com score 100 e zero findings.
+
+
+## Evidências de referência interativa
+
+Scalar.AspNetCore 2.17.13, OpenAPI nativo e transformers em ApiDocumentation. A segurança é inferida dos metadados de autorização de cada operação: públicas permanecem sem bearer; protegidas referenciam Bearer/http. Entrada e saída usam DTOs e respostas tipadas. O schema inclui limites, DateOnly como date, decimal, estados por nome, code e traceId de ProblemDetails e exemplos sem credenciais.
+
+Uma prova HTTP executou 65 verificações: presença dos 13 métodos/rotas obrigatórios, IDs únicos, tags, segurança, limites, formatos, enum de estado, response DTO e exemplos. Depois da revisão do schema, outras verificações confirmaram os três campos obrigatórios de Draft e code/traceId explícitos nos erros.
+
+Chromium carregou `/docs`, sem erros de JavaScript. A renderização foi inspecionada em captura anterior à entrada de credenciais. Pela interface Scalar, executou login 200, recebeu accessToken, configurou Bearer e executou GET /api/admin/users com 200 e uma conta Admin. Credenciais ficaram no processo de teste; nenhum HTML/captura após sua entrada ou token foi persistido. Agent desabilitado confirmado na configuração renderizada. Essas provas de navegador foram locais; o futuro workflow de demo HTTP não deve ser apresentado como teste de browser.
