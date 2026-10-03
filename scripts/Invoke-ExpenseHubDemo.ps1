@@ -10,6 +10,7 @@ $startedAt = [DateTime]::UtcNow
 $scenarios = [System.Collections.Generic.List[object]]::new()
 $runId = [Guid]::NewGuid().ToString("N")
 $credential = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32)) + "aA1!"
+if ($env:GITHUB_ACTIONS -eq "true") { Write-Output "::add-mask::$credential" }
 $today = [DateTime]::UtcNow.ToString("yyyy-MM-dd", [Globalization.CultureInfo]::InvariantCulture)
 $failure = $null
 

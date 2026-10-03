@@ -52,6 +52,7 @@ try {
     finally { $listener.Stop() }
     $baseUrl = "http://127.0.0.1:$port"
     $credential = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32)) + "aA1!"
+    if ($env:GITHUB_ACTIONS -eq "true") { Write-Output "::add-mask::$credential" }
     Set-VerificationEnvironment "ASPNETCORE_URLS" $baseUrl
     Set-VerificationEnvironment "ASPNETCORE_ENVIRONMENT" "Development"
     Set-VerificationEnvironment "ConnectionStrings__ExpenseHub" ("Data Source=" + (Join-Path $temporaryDirectory "demo.db") + ";Pooling=False")
