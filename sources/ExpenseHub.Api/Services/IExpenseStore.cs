@@ -29,6 +29,17 @@ public interface IExpenseStore
     /// <returns>The view or null for both absent and invisible resources.</returns>
     Task<ExpenseResponse?> FindVisibleAsync(Guid id, ExpenseReadScope scope, CancellationToken cancellationToken);
 
+    /// <summary>Reads revision-ordered audit events through the expense visibility scope.</summary>
+    /// <param name="id">The requested expense.</param>
+    /// <param name="scope">The authorized visibility union.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
+    /// <returns>The events, or null when the expense is absent or invisible.</returns>
+    Task<IReadOnlyList<ExpenseHistoryResponse>?> HistoryVisibleAsync(Guid id, ExpenseReadScope scope, CancellationToken cancellationToken);
+
+    /// <summary>Stages a server-derived payment in the same unit of work.</summary>
+    /// <param name="payment">The unique payment for an approved expense.</param>
+    void AddPayment(PaymentRecord payment);
+
     /// <summary>Stages a new expense in the current unit of work.</summary>
     /// <param name="expense">The server-created expense.</param>
     void AddExpense(Expense expense);

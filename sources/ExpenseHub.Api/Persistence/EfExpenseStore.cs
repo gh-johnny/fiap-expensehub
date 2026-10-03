@@ -39,6 +39,19 @@ public sealed class EfExpenseStore : IExpenseStore
         => Visible(scope).Where(expense => expense.Id == id).Select(Projection()).SingleOrDefaultAsync(cancellationToken);
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<ExpenseHistoryResponse>?> HistoryVisibleAsync(Guid id, ExpenseReadScope scope, CancellationToken cancellationToken)
+    {
+        Expression<Func<ExpenseHistory, ExpenseHistoryResponse>> projection = HistoryProjection();
+        return await Visible(scope).Where(expense => expense.Id == id)
+            .Select(expense => _context.ExpenseHistories.Where(history => history.ExpenseId == expense.Id)
+                .OrderBy(history => history.Revision).Select(projection).ToList())
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public void AddPayment(PaymentRecord payment) => _context.PaymentRecords.Add(payment);
+
+    /// <inheritdoc />
     public void AddExpense(Expense expense) => _context.Expenses.Add(expense);
 
     /// <inheritdoc />
@@ -58,12 +71,19 @@ public sealed class EfExpenseStore : IExpenseStore
         }
         catch (DbUpdateException exception) when (exception.InnerException is SqliteException sqlite
             && sqlite.SqliteExtendedErrorCode == 2067
-            && sqlite.Message.Contains("ExpenseHistories.ExpenseId, ExpenseHistories.Revision", StringComparison.Ordinal))
+            && (sqlite.Message.Contains("ExpenseHistories.ExpenseId, ExpenseHistories.Revision", StringComparison.Ordinal)
+                || sqlite.Message.Contains("PaymentRecords.ExpenseId", StringComparison.Ordinal)))
         {
             _context.ChangeTracker.Clear();
             throw new ApiProblemException(409, "expense.concurrent_update", "Another request already recorded this revision.");
         }
+        catch (DbUpdateException)
+        {
+            _context.ChangeTracker.Clear();
+            throw;
+        }
     }
+
     private IQueryable<Expense> Visible(ExpenseReadScope scope)
         => _context.Expenses.AsNoTracking().Where(expense => scope.All
             || (scope.Own && expense.OwnerId == scope.OwnerId)
@@ -73,5 +93,10 @@ public sealed class EfExpenseStore : IExpenseStore
     private static Expression<Func<Expense, ExpenseResponse>> Projection()
         => expense => new ExpenseResponse(expense.Id, expense.OwnerId, expense.Description, expense.Amount,
             expense.ExpenseDate, expense.Status.ToString(), expense.CategoryId, expense.CreatedAtUtc, expense.Revision);
+    private static Expression<Func<ExpenseHistory, ExpenseHistoryResponse>> HistoryProjection()
+        => history => new ExpenseHistoryResponse(history.Id, history.ExpenseId, history.Revision, history.Action,
+            history.ActorId, history.OccurredAtUtc, history.PreviousStatus.HasValue ? history.PreviousStatus.Value.ToString() : null,
+            history.NewStatus.ToString(), history.Reason, history.PreviousDescription, history.NewDescription,
+            history.PreviousAmount, history.NewAmount, history.PreviousExpenseDate, history.NewExpenseDate);
 
 }

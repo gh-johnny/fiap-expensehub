@@ -89,5 +89,22 @@ public sealed class ExpensesController : ControllerBase
     [Authorize(Roles = RoleNames.Approver)]
     public async Task<IActionResult> Reject(Guid id, RejectExpenseRequest request, CancellationToken cancellationToken)
         => Ok(await _service.RejectAsync(CurrentActor.FromPrincipal(User), id, request, cancellationToken));
+    /// <summary>Records payment for a foreign Approved expense.</summary>
+    /// <param name="id">The expense identifier.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
+    /// <returns>The paid view.</returns>
+    [HttpPost("{id:guid}/pay")]
+    [Authorize(Roles = RoleNames.Finance)]
+    public async Task<IActionResult> Pay(Guid id, CancellationToken cancellationToken)
+        => Ok(await _service.PayAsync(CurrentActor.FromPrincipal(User), id, cancellationToken));
+
+    /// <summary>Reads an expense timeline with the same visibility as its detail.</summary>
+    /// <param name="id">The expense identifier.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
+    /// <returns>Authorized events ordered by revision.</returns>
+    [HttpGet("{id:guid}/history")]
+    [Authorize(Roles = RoleNames.Employee + "," + RoleNames.Approver + "," + RoleNames.Finance + "," + RoleNames.Auditor)]
+    public async Task<IActionResult> History(Guid id, CancellationToken cancellationToken)
+        => Ok(await _service.HistoryAsync(CurrentActor.FromPrincipal(User), id, cancellationToken));
 
 }

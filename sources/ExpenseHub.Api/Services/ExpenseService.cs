@@ -151,6 +151,37 @@ public sealed class ExpenseService
         return View(expense);
     }
 
+    /// <summary>Pays a foreign Approved expense once using server-derived actor, time and amount.</summary>
+    /// <param name="actor">The authenticated Finance actor.</param>
+    /// <param name="id">The expense identifier.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
+    /// <returns>The paid view.</returns>
+    public async Task<ExpenseResponse> PayAsync(CurrentActor actor, Guid id, CancellationToken cancellationToken)
+    {
+        ExpenseAuthorization.RequireRole(actor, RoleNames.Finance);
+        Expense expense = await LoadAsync(id, cancellationToken);
+        ExpenseAuthorization.RequireExternalAction(actor, expense, RoleNames.Finance, ExpenseStatus.Approved);
+        RecordTransition(expense, actor, ExpenseStatus.Paid, "Paid", null);
+        _store.AddPayment(new PaymentRecord
+        {
+            ExpenseId = expense.Id,
+            ActorId = actor.UserId,
+            Amount = expense.Amount,
+            PaidAtUtc = _clock.GetUtcNow().UtcDateTime,
+        });
+        await _store.SaveAsync(cancellationToken);
+        return View(expense);
+    }
+
+    /// <summary>Reads the audit timeline under the same expense read scope.</summary>
+    /// <param name="actor">The authenticated actor.</param>
+    /// <param name="id">The requested expense.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
+    /// <returns>The authorized revision-ordered timeline.</returns>
+    public async Task<IReadOnlyList<ExpenseHistoryResponse>> HistoryAsync(CurrentActor actor, Guid id, CancellationToken cancellationToken)
+        => await _store.HistoryVisibleAsync(id, ExpenseAuthorization.ReadScope(actor), cancellationToken)
+            ?? throw new ApiProblemException(404, "expense.not_found", "The expense was not found.");
+
     private void RecordTransition(Expense expense, CurrentActor actor, ExpenseStatus target, string action, string? reason)
     {
         ExpenseStatus previous = expense.Status;
