@@ -110,11 +110,55 @@ public sealed class ExpenseService
         ExpenseAuthorization.RequireRole(actor, RoleNames.Employee);
         Expense expense = await LoadAsync(id, cancellationToken);
         ExpenseAuthorization.RequireOwnDraft(actor, expense);
-        expense.Status = ExpenseStatus.Submitted;
-        expense.Revision++;
-        _store.AddHistory(NewHistory(expense, actor, "Submitted", ExpenseStatus.Draft));
+        RecordTransition(expense, actor, ExpenseStatus.Submitted, "Submitted", null);
         await _store.SaveAsync(cancellationToken);
         return View(expense);
+    }
+
+    /// <summary>Approves a submitted expense without using read visibility for the mutation.</summary>
+    /// <param name="actor">The authenticated Approver.</param>
+    /// <param name="id">The expense identifier.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
+    /// <returns>The approved view.</returns>
+    public async Task<ExpenseResponse> ApproveAsync(CurrentActor actor, Guid id, CancellationToken cancellationToken)
+    {
+        ExpenseAuthorization.RequireRole(actor, RoleNames.Approver);
+        Expense expense = await LoadAsync(id, cancellationToken);
+        ExpenseAuthorization.RequireExternalAction(actor, expense, RoleNames.Approver, ExpenseStatus.Submitted);
+        RecordTransition(expense, actor, ExpenseStatus.Approved, "Approved", null);
+        await _store.SaveAsync(cancellationToken);
+        return View(expense);
+    }
+
+    /// <summary>Rejects a submitted expense with a validated justification.</summary>
+    /// <param name="actor">The authenticated Approver.</param>
+    /// <param name="id">The expense identifier.</param>
+    /// <param name="request">The trimmed justification.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
+    /// <returns>The rejected view.</returns>
+    public async Task<ExpenseResponse> RejectAsync(CurrentActor actor, Guid id, RejectExpenseRequest request, CancellationToken cancellationToken)
+    {
+        ExpenseAuthorization.RequireRole(actor, RoleNames.Approver);
+        Expense expense = await LoadAsync(id, cancellationToken);
+        ExpenseAuthorization.RequireExternalAction(actor, expense, RoleNames.Approver, ExpenseStatus.Submitted);
+        if (!Validator.TryValidateObject(request, new ValidationContext(request), new List<ValidationResult>(), validateAllProperties: true))
+        {
+            throw new ApiProblemException(400, "expense.invalid_reason", "The rejection justification is invalid.");
+        }
+
+        RecordTransition(expense, actor, ExpenseStatus.Rejected, "Rejected", request.Reason);
+        await _store.SaveAsync(cancellationToken);
+        return View(expense);
+    }
+
+    private void RecordTransition(Expense expense, CurrentActor actor, ExpenseStatus target, string action, string? reason)
+    {
+        ExpenseStatus previous = expense.Status;
+        expense.Status = target;
+        expense.Revision++;
+        ExpenseHistory history = NewHistory(expense, actor, action, previous);
+        history.Reason = reason;
+        _store.AddHistory(history);
     }
 
     private static ExpenseResponse View(Expense expense)

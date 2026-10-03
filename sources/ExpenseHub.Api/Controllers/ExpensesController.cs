@@ -71,4 +71,23 @@ public sealed class ExpensesController : ControllerBase
     public async Task<IActionResult> Submit(Guid id, CancellationToken cancellationToken)
         => Ok(await _service.SubmitAsync(CurrentActor.FromPrincipal(User), id, cancellationToken));
 
+    /// <summary>Approves a Submitted expense belonging to a different account.</summary>
+    /// <param name="id">The expense identifier.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
+    /// <returns>The approved view.</returns>
+    [HttpPost("{id:guid}/approve")]
+    [Authorize(Roles = RoleNames.Approver)]
+    public async Task<IActionResult> Approve(Guid id, CancellationToken cancellationToken)
+        => Ok(await _service.ApproveAsync(CurrentActor.FromPrincipal(User), id, cancellationToken));
+
+    /// <summary>Rejects a Submitted expense belonging to a different account.</summary>
+    /// <param name="id">The expense identifier.</param>
+    /// <param name="request">The required justification.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
+    /// <returns>The rejected view.</returns>
+    [HttpPost("{id:guid}/reject")]
+    [Authorize(Roles = RoleNames.Approver)]
+    public async Task<IActionResult> Reject(Guid id, RejectExpenseRequest request, CancellationToken cancellationToken)
+        => Ok(await _service.RejectAsync(CurrentActor.FromPrincipal(User), id, request, cancellationToken));
+
 }

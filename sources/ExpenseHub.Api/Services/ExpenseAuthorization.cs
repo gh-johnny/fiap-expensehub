@@ -47,6 +47,22 @@ public static class ExpenseAuthorization
         RequireState(expense, ExpenseStatus.Draft);
     }
 
+    /// <summary>Requires the action role, a different owner and the eligible state, in that order.</summary>
+    /// <param name="actor">The authenticated actor.</param>
+    /// <param name="expense">The loaded expense.</param>
+    /// <param name="role">The action-granting role.</param>
+    /// <param name="expected">The required lifecycle state.</param>
+    public static void RequireExternalAction(CurrentActor actor, Expense expense, string role, ExpenseStatus expected)
+    {
+        RequireRole(actor, role);
+        if (string.Equals(actor.UserId, expense.OwnerId, StringComparison.Ordinal))
+        {
+            throw new ApiProblemException(403, "expense.self_action", "An owner cannot decide or pay their own expense.");
+        }
+
+        RequireState(expense, expected);
+    }
+
     /// <summary>Rejects invalid and repeated transitions with a conflict.</summary>
     /// <param name="expense">The loaded expense.</param>
     /// <param name="expected">The state required by the action.</param>
