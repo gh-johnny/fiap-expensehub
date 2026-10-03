@@ -7,6 +7,21 @@ namespace ExpenseHub.Api.Services;
 /// <summary>Enforces action permissions, ownership and lifecycle before any mutation.</summary>
 public static class ExpenseAuthorization
 {
+    /// <summary>Builds the union of expense read permissions and rejects roleless or Admin-only actors.</summary>
+    /// <param name="actor">The authenticated actor.</param>
+    /// <returns>The scope to apply in the persistence query.</returns>
+    public static ExpenseReadScope ReadScope(CurrentActor actor)
+    {
+        var scope = new ExpenseReadScope(actor.UserId, actor.Roles.Contains(RoleNames.Employee),
+            actor.Roles.Contains(RoleNames.Approver), actor.Roles.Contains(RoleNames.Finance), actor.Roles.Contains(RoleNames.Auditor));
+        if (!scope.Own && !scope.Submitted && !scope.Finance && !scope.All)
+        {
+            throw new ApiProblemException(403, "auth.forbidden", "Expense reading is not permitted.");
+        }
+
+        return scope;
+    }
+
     /// <summary>Requires the role that grants a particular action.</summary>
     /// <param name="actor">The authenticated immutable actor.</param>
     /// <param name="role">The required role.</param>

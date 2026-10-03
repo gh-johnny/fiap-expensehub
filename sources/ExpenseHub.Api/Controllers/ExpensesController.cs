@@ -45,4 +45,30 @@ public sealed class ExpensesController : ControllerBase
     [Authorize(Roles = RoleNames.Employee)]
     public async Task<IActionResult> Update(Guid id, ExpenseDraftRequest request, CancellationToken cancellationToken)
         => Ok(await _service.UpdateAsync(CurrentActor.FromPrincipal(User), id, request, cancellationToken));
+    /// <summary>Lists expenses visible under the union of the actor roles.</summary>
+    /// <param name="cancellationToken">Request cancellation.</param>
+    /// <returns>Authorized read-only views.</returns>
+    [HttpGet]
+    [Authorize(Roles = RoleNames.Employee + "," + RoleNames.Approver + "," + RoleNames.Finance + "," + RoleNames.Auditor)]
+    public async Task<IActionResult> List(CancellationToken cancellationToken)
+        => Ok(await _service.ListAsync(CurrentActor.FromPrincipal(User), cancellationToken));
+
+    /// <summary>Reads an expense only within the authorized visibility scope.</summary>
+    /// <param name="id">The expense identifier.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
+    /// <returns>The authorized view.</returns>
+    [HttpGet("{id:guid}")]
+    [Authorize(Roles = RoleNames.Employee + "," + RoleNames.Approver + "," + RoleNames.Finance + "," + RoleNames.Auditor)]
+    public async Task<IActionResult> Find(Guid id, CancellationToken cancellationToken)
+        => Ok(await _service.FindAsync(CurrentActor.FromPrincipal(User), id, cancellationToken));
+
+    /// <summary>Submits the authenticated Employee's Draft.</summary>
+    /// <param name="id">The expense identifier.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
+    /// <returns>The submitted view.</returns>
+    [HttpPost("{id:guid}/submit")]
+    [Authorize(Roles = RoleNames.Employee)]
+    public async Task<IActionResult> Submit(Guid id, CancellationToken cancellationToken)
+        => Ok(await _service.SubmitAsync(CurrentActor.FromPrincipal(User), id, cancellationToken));
+
 }

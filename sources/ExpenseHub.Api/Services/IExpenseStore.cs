@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using ExpenseHub.Api.Models;
+using ExpenseHub.Api.Contracts.Responses;
 
 namespace ExpenseHub.Api.Services;
 
@@ -13,6 +15,19 @@ public interface IExpenseStore
     /// <param name="cancellationToken">Request cancellation.</param>
     /// <returns>The expense, or null when absent.</returns>
     Task<Expense?> LoadForUpdateAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>Queries only visible expenses and projects read-only views.</summary>
+    /// <param name="scope">The authorized visibility union.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
+    /// <returns>The visible ordered views.</returns>
+    Task<IReadOnlyList<ExpenseResponse>> ListVisibleAsync(ExpenseReadScope scope, CancellationToken cancellationToken);
+
+    /// <summary>Finds an expense only within the authorized read scope.</summary>
+    /// <param name="id">The requested identifier.</param>
+    /// <param name="scope">The authorized visibility union.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
+    /// <returns>The view or null for both absent and invisible resources.</returns>
+    Task<ExpenseResponse?> FindVisibleAsync(Guid id, ExpenseReadScope scope, CancellationToken cancellationToken);
 
     /// <summary>Stages a new expense in the current unit of work.</summary>
     /// <param name="expense">The server-created expense.</param>

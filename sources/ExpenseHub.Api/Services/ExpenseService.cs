@@ -84,6 +84,39 @@ public sealed class ExpenseService
         return View(expense);
     }
 
+    /// <summary>Lists the union of all granted read scopes.</summary>
+    /// <param name="actor">The authenticated actor.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
+    /// <returns>Only authorized read-only views.</returns>
+    public Task<IReadOnlyList<ExpenseResponse>> ListAsync(CurrentActor actor, CancellationToken cancellationToken)
+        => _store.ListVisibleAsync(ExpenseAuthorization.ReadScope(actor), cancellationToken);
+
+    /// <summary>Finds a visible expense without disclosing invisible identifiers.</summary>
+    /// <param name="actor">The authenticated actor.</param>
+    /// <param name="id">The requested identifier.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
+    /// <returns>The authorized view.</returns>
+    public async Task<ExpenseResponse> FindAsync(CurrentActor actor, Guid id, CancellationToken cancellationToken)
+        => await _store.FindVisibleAsync(id, ExpenseAuthorization.ReadScope(actor), cancellationToken)
+            ?? throw new ApiProblemException(404, "expense.not_found", "The expense was not found.");
+
+    /// <summary>Submits an owned Draft once, recording its transition atomically.</summary>
+    /// <param name="actor">The authenticated Employee.</param>
+    /// <param name="id">The expense identifier.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
+    /// <returns>The submitted expense view.</returns>
+    public async Task<ExpenseResponse> SubmitAsync(CurrentActor actor, Guid id, CancellationToken cancellationToken)
+    {
+        ExpenseAuthorization.RequireRole(actor, RoleNames.Employee);
+        Expense expense = await LoadAsync(id, cancellationToken);
+        ExpenseAuthorization.RequireOwnDraft(actor, expense);
+        expense.Status = ExpenseStatus.Submitted;
+        expense.Revision++;
+        _store.AddHistory(NewHistory(expense, actor, "Submitted", ExpenseStatus.Draft));
+        await _store.SaveAsync(cancellationToken);
+        return View(expense);
+    }
+
     private static ExpenseResponse View(Expense expense)
         => new(expense.Id, expense.OwnerId, expense.Description, expense.Amount, expense.ExpenseDate,
             expense.Status.ToString(), expense.CategoryId, expense.CreatedAtUtc, expense.Revision);
