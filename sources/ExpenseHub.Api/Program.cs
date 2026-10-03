@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using ExpenseHub.Api.Infrastructure;
@@ -35,6 +36,9 @@ internal static class Program
         builder.Services.AddAuthorization();
         builder.Services.AddScoped<IUserRoleStore, IdentityUserRoleStore>();
         builder.Services.AddScoped<UserRoleService>();
+        builder.Services.AddScoped<IExpenseStore, EfExpenseStore>();
+        builder.Services.AddScoped<ExpenseService>();
+        builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddExceptionHandler<ApiExceptionHandler>();
         builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
         {
