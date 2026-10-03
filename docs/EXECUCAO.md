@@ -47,8 +47,8 @@ A conta autenticada nesta sessão é João. Os commits usam sua configuração r
 | I09 — unitários próprios | [PR #10](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/10), SHA 6ea57f9; 111 testes; CI score 100, zero findings/warnings. |
 | M01 — integração SQLite | [PR #11](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/11), SHA 30bbd4b; oito testes; CI score 100, zero findings/warnings. |
 | I10 — qualidade final | Pendente do SHA final integrado na main. |
-| M02 — Scalar/OpenAPI | Implementado; build sem warnings, 65 verificações HTTP e provas adicionais de schemas; Chromium executou login e consulta protegida com 200. |
-| M03 — demo automatizada/CI adicional | Ainda não implementado. |
+| M02 — Scalar/OpenAPI | [PR #12](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/12), SHA 39dcc7a; CI score 100, zero findings/warnings; Chromium executou login e consulta protegida com 200. |
+| M03 — demo automatizada/CI adicional | Demo HTTP implementada: 104 cenários passaram; prova negativa retorna erro com relatório failed. Executor completo passou com build sem warnings, 119 testes e migration; workflow ainda aguarda publicação. |
 | Participação individual dos três | Pendente de contribuições próprias de Matheus e André. |
 
 ## Evidências da fundação
@@ -106,3 +106,10 @@ Scalar.AspNetCore 2.17.13, OpenAPI nativo e transformers em ApiDocumentation. A 
 Uma prova HTTP executou 65 verificações: presença dos 13 métodos/rotas obrigatórios, IDs únicos, tags, segurança, limites, formatos, enum de estado, response DTO e exemplos. Depois da revisão do schema, outras verificações confirmaram os três campos obrigatórios de Draft e code/traceId explícitos nos erros.
 
 Chromium carregou `/docs`, sem erros de JavaScript. A renderização foi inspecionada em captura anterior à entrada de credenciais. Pela interface Scalar, executou login 200, recebeu accessToken, configurou Bearer e executou GET /api/admin/users com 200 e uma conta Admin. Credenciais ficaram no processo de teste; nenhum HTML/captura após sua entrada ou token foi persistido. Agent desabilitado confirmado na configuração renderizada. Essas provas de navegador foram locais; o futuro workflow de demo HTTP não deve ser apresentado como teste de browser.
+
+
+## Evidências da demonstração reproduzível
+
+A [demo versionada](DEMO.md) executou 104 cenários HTTP com SQLite descartável: rotas/OpenAPI, bearer e roles, isolamento, Draft/edição, validações, Paid, Rejected, histórico e proibição de autoação com todas as roles. Os relatórios JSON/Markdown não incluem credenciais, bearer, headers ou corpos. Inspeção também confirmou ausência das credenciais e do token Admin usados na execução.
+
+Uma execução com o host já encerrado terminou com saída 1, status failed, zero cenários aprovados e uma falha Health sem status HTTP observado. Falha real não é convertida em sucesso. O leitor da demo decodifica UTF-8 quando PowerShell devolve application/problem+json como bytes. O executor usa migrations reais em arquivo exclusivo, credencial gerada e processo próprio; seu workflow publica somente relatórios sanitizados. O ciclo completo passou localmente: restore, build sem warnings, 111 unitários, oito integrações, migration e 104 cenários HTTP. O diretório temporário foi removido. O workflow ainda precisa do relatório do SHA publicado; o relatório local identifica a árvore de trabalho e não comprova um novo commit.

@@ -8,7 +8,7 @@ last-reviewed: 2026-10-03
 
 # ExpenseHub — API de reembolsos
 
-Checkpoint de C# da FIAP: API ASP.NET Core 10 com persistência SQLite/EF Core, Identity bearer e autorização por perfil, proprietário e estado. As 13 rotas obrigatórias, histórico e pagamento estão implementados. Scalar e provas de persistência estão implementados. Demo automatizada e integração final das PRs estão em andamento.
+Checkpoint de C# da FIAP: API ASP.NET Core 10 com persistência SQLite/EF Core, Identity bearer e autorização por perfil, proprietário e estado. As 13 rotas obrigatórias, histórico e pagamento estão implementados. Scalar, provas de persistência e demo HTTP com 104 cenários estão implementados. Integração final das PRs está pendente de aprovação.
 
 | Integrante | RM |
 |---|---|
@@ -79,6 +79,14 @@ Na seção Identity, executar `/register` ou `/login` com useCookies=false. Sele
 
 A referência contém tags, IDs de operação únicos, DTOs de entrada/saída, estados por nome, limites de campos e exemplos válidos/inválidos. ProblemDetails documenta code e traceId. Verificações HTTP conferiram as 13 operações obrigatórias; Chromium carregou a interface sem erros de JavaScript e executou login e consulta administrativa protegida com 200.
 
+## Demo automatizada
+
+```shell
+pwsh -NoProfile -File ./scripts/Invoke-ExpenseHubVerification.ps1
+```
+
+O executor compila, testa, aplica migrations em SQLite temporário, gera credenciais em memória, inicia a API e executa **104 cenários HTTP**. Ao terminar, encerra seu processo e remove o banco descartável. Relatórios sem senhas/tokens ficam em `artifacts/demo/report.json` e `report.md`. Saída não zero indica falha; conferir status, contagens e SHA. O [guia da demo](docs/DEMO.md) descreve execução contra host existente e alcance das provas. O workflow adicional publica `expensehub-demo-report`, separado do corretor oficial.
+
 ## Testes e qualidade
 
 ```shell
@@ -92,6 +100,7 @@ O workflow oficial permanece intacto. O score está no artefato `code-quality-re
 
 ## Documentação e participação
 
+- [Demonstração automatizada e artefatos](docs/DEMO.md)
 - [Execução e validações realizadas](docs/EXECUCAO.md)
 - [Plano técnico e critérios de conclusão](docs/PLANO.md)
 - [Divisão de trabalho, pacotes e autoria](docs/DIVISAO-TRABALHO.md)
