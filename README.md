@@ -8,7 +8,7 @@ last-reviewed: 2026-10-03
 
 # ExpenseHub — API de reembolsos
 
-Checkpoint de C# da FIAP: API ASP.NET Core 10 com persistência SQLite/EF Core, Identity bearer e regras de acesso por perfil, proprietário e estado. A execução está em andamento. Fundação relacional, migrations, Identity bearer, cadastro público e seed idempotente estão implementados. Administração e fluxos de despesas entram nas entregas seguintes.
+Checkpoint de C# da FIAP: API ASP.NET Core 10 com persistência SQLite/EF Core, Identity bearer e regras de acesso por perfil, proprietário e estado. A execução está em andamento. Fundação relacional, migrations, Identity bearer, cadastro público e seed idempotente estão implementados. Administração de usuários e roles também está implementada; fluxos de despesas entram nas entregas seguintes.
 
 | Integrante | RM |
 |---|---|
@@ -49,7 +49,7 @@ A migration contém as tabelas de Identity, Expense, ExpenseCategory, ExpenseHis
 
 `POST /register` recebe email/password e cria conta sem roles. Um campo adicional de role não concede permissão. `POST /login?useCookies=false` recebe as credenciais e devolve accessToken/refreshToken nativos do Identity. Nas requisições protegidas, usar o accessToken no header Authorization como bearer; não tratá-lo como JWT.
 
-As cinco roles são Admin, Employee, Approver, Finance e Auditor. O seed não cria usuários desses perfis. A administração de roles será acrescentada em I03; após alterar roles, o usuário precisa fazer novo login. Não inserir token ou senha em exemplos versionados.
+As cinco roles são Admin, Employee, Approver, Finance e Auditor. O seed não cria usuários desses perfis. `GET /api/admin/users` lista contas e roles para Admin. `PUT /api/admin/users/{id}/roles` substitui o conjunto de roles em uma transação e retorna 204. Roles desconhecidas retornam 400; remover o próprio Admin retorna 403. Lista vazia é permitida para outro usuário. Após alterar roles, o usuário precisa fazer novo login. Não inserir token ou senha em exemplos versionados.
 
 ## Testes e qualidade
 
@@ -60,7 +60,7 @@ pwsh -NoProfile -File ./tests/Invoke-CodeQuality.E2E.ps1
 pwsh -NoProfile -File ./scripts/Invoke-CodeQuality.ps1 -Ci
 ```
 
-O workflow oficial permanece intacto. O score está no artefato `code-quality-report`; verificar `score.final`, findings e commit analisado. Os testes funcionais próprios estão previstos nas próximas entregas; sucesso de build não comprova autorização ou fluxo de reembolso.
+O workflow oficial permanece intacto. O score está no artefato `code-quality-report`; verificar `score.final`, findings e commit analisado. Os 14 testes unitários próprios de administração usam um adaptador em memória, sem EF, banco ou rede. Uma prova HTTP local adicional executou 59 verificações de autenticação, roles, erros e rollback provocado em SQLite descartável. Os testes do fluxo de reembolso serão acrescentados nas próximas entregas.
 
 ## Documentação e participação
 

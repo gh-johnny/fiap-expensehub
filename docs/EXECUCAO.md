@@ -37,9 +37,10 @@ A conta autenticada nesta sessão é João. Os commits usam sua configuração r
 |---|---|
 | Preparação e planejamento | Repositório, ferramentas e PR de planejamento concluídos. |
 | I01 — fundação relacional | [PR #2](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/2), commit `5b6fa16cb98704ad3739beeddc0a3d35329e542b`; CI score 100 sem findings. Aberta, sem merge. |
-| I02 — Identity/bearer/seed | Implementação e provas HTTP locais passaram; 403 por role será exercitado com as rotas administrativas de I03 antes do fechamento funcional. |
-| I03–I08 — API funcional | Ainda não implementadas. |
-| I09 — unitários próprios | Ainda não implementados; ausência de testes no template não é evidência funcional. |
+| I02 — Identity/bearer/seed | [PR #3](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/3), commit `2066fa0ff4704f26a2ea3a3ccf1acff312b747c9`, CI score 100. Prova 403 concluída em I03. |
+| I03 — administração | Implementada; 14 testes unitários e 59 verificações HTTP passaram, inclusive rollback real após falha do provider. |
+| I04–I08 — despesas | Ainda não implementadas. |
+| I09 — unitários próprios | 14 testes de administração passaram; matriz de despesas e transições pendente. |
 | I10 — qualidade final | Pendente do código e SHA finais; baseline e fundação local com score 100. |
 | Scalar, demo HTTP e integração SQLite | Ainda não implementados. |
 | Participação individual dos três | Pendente de contribuições próprias de Matheus e André. |
@@ -67,4 +68,13 @@ Build após Identity: zero erros/warnings. Factory de contexto permite migration
 
 Provas HTTP observadas: Admin recebe bearer; credencial inválida retorna 401; rota Identity protegida retorna 401 sem token ou com token inválido e 200 com bearer válido; cadastro HTTP com tentativa de role Admin permanece sem roles. A conta registrada persiste no segundo início, enquanto o seed continua com somente um Admin inicial. Credenciais geradas em memória e tokens não foram impressos.
 
-A prova 403 por role insuficiente depende da primeira rota administrativa de I03. Não está declarada validada nesta etapa. O [CI de I01](https://github.com/gh-johnny/checkpoint-expensehub-fiap/actions/runs/37095828121) já fornece relatório do SHA da fundação com status passed, score 100 e zero findings/warnings/erros/caps.
+A prova 403 por role insuficiente foi concluída nas rotas administrativas de I03. O [CI de I01](https://github.com/gh-johnny/checkpoint-expensehub-fiap/actions/runs/37095828121) já fornece relatório do SHA da fundação com status passed, score 100 e zero findings/warnings/erros/caps.
+
+
+## Evidências de administração
+
+As rotas administrativas validam Admin no controller e no serviço. Ator imutável, lista de roles conhecida, substituição do conjunto completo e bloqueio de remoção do próprio Admin. O adaptador usa uma transação do mesmo contexto Identity, com rollback mesmo quando o cancellation token foi cancelado.
+
+Os 14 testes unitários próprios passaram sem EF, SQLite ou rede, com zero warnings. A prova HTTP local executou 59 verificações: 401 e header bearer, 403 para role ausente e cada perfil não administrativo, lista de contas sem hashes, mudança de roles com novo login, token antigo sem privilégios novos, conjunto vazio, roles desconhecidas/nulas, conta ausente e bloqueio de remoção do próprio Admin.
+
+Uma trigger temporária no SQLite descartável provocou falha na inserção da nova role após remoção da anterior. A API devolveu 500 genérico, com code/traceId; a role Employee e o concurrency stamp anteriores permaneceram intactos. Removida a trigger, a troca voltou a funcionar. Credenciais e tokens ficaram somente em memória. Essa prova externa será incorporada aos testes de integração reproduzíveis; não substitui sua entrega.
