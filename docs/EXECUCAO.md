@@ -36,8 +36,9 @@ A conta autenticada nesta sessão é João. Os commits usam sua configuração r
 | Entrega | Estado verificado |
 |---|---|
 | Preparação e planejamento | Repositório, ferramentas e PR de planejamento concluídos. |
-| I01 — fundação relacional | Implementada e validada localmente; commit/PR de fundação em preparação. |
-| I02–I08 — API funcional | Ainda não implementadas. |
+| I01 — fundação relacional | [PR #2](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/2), commit `5b6fa16cb98704ad3739beeddc0a3d35329e542b`; CI score 100 sem findings. Aberta, sem merge. |
+| I02 — Identity/bearer/seed | Implementação e provas HTTP locais passaram; 403 por role será exercitado com as rotas administrativas de I03 antes do fechamento funcional. |
+| I03–I08 — API funcional | Ainda não implementadas. |
 | I09 — unitários próprios | Ainda não implementados; ausência de testes no template não é evidência funcional. |
 | I10 — qualidade final | Pendente do código e SHA finais; baseline e fundação local com score 100. |
 | Scalar, demo HTTP e integração SQLite | Ainda não implementados. |
@@ -59,3 +60,11 @@ Validações executadas:
 Essa análise local foi feita antes do commit da fundação; o SHA do relatório ainda identifica o HEAD de planejamento. Portanto, não é relatório de entrega do código novo. A PR de I01 precisa de seu próprio artefato de CI, e a entrega final precisa do relatório da main após o último merge.
 
 O build ainda não comprova autorização, transições nem atomicidade real das operações futuras. Provas funcionais, unitários próprios, integração e demo serão acrescentados às respectivas entregas antes de serem declarados concluídos.
+
+## Evidências de Identity
+
+Build após Identity: zero erros/warnings. Factory de contexto permite migration sem credenciais de bootstrap. Em SQLite temporário externo ao repositório, a API foi iniciada duas vezes: cinco roles, uma conta inicial Admin e nenhum usuário duplicado pelo seed.
+
+Provas HTTP observadas: Admin recebe bearer; credencial inválida retorna 401; rota Identity protegida retorna 401 sem token ou com token inválido e 200 com bearer válido; cadastro HTTP com tentativa de role Admin permanece sem roles. A conta registrada persiste no segundo início, enquanto o seed continua com somente um Admin inicial. Credenciais geradas em memória e tokens não foram impressos.
+
+A prova 403 por role insuficiente depende da primeira rota administrativa de I03. Não está declarada validada nesta etapa. O [CI de I01](https://github.com/gh-johnny/checkpoint-expensehub-fiap/actions/runs/37095828121) já fornece relatório do SHA da fundação com status passed, score 100 e zero findings/warnings/erros/caps.

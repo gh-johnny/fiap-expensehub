@@ -8,7 +8,7 @@ last-reviewed: 2026-10-03
 
 # ExpenseHub — API de reembolsos
 
-Checkpoint de C# da FIAP: API ASP.NET Core 10 com persistência SQLite/EF Core, Identity bearer e regras de acesso por perfil, proprietário e estado. A execução está em andamento. Nesta primeira entrega, a fundação relacional e a migration estão implementadas; os fluxos HTTP entram nas entregas seguintes.
+Checkpoint de C# da FIAP: API ASP.NET Core 10 com persistência SQLite/EF Core, Identity bearer e regras de acesso por perfil, proprietário e estado. A execução está em andamento. Fundação relacional, migrations, Identity bearer, cadastro público e seed idempotente estão implementados. Administração e fluxos de despesas entram nas entregas seguintes.
 
 | Integrante | RM |
 |---|---|
@@ -39,9 +39,17 @@ dotnet ef database update --project ./sources/ExpenseHub.Api --startup-project .
 dotnet run --project ./sources/ExpenseHub.Api --no-launch-profile
 ```
 
+Antes do primeiro início, definir `Seed__AdminEmail` e `Seed__AdminPassword` em configuração externa. A senha precisa atender às regras do Identity. O seed cria somente o Admin inicial, com identidade estável; reinícios preservam sua conta e senha existente. As ferramentas de migration não exigem essas credenciais.
+
 Usar a URL exibida pelo host para consultar `GET /health`. Para fixar uma URL local, configurar `ASPNETCORE_URLS` no ambiente. O banco é criado/atualizado pela migration; iniciar o processo sozinho não substitui esse comando.
 
 A migration contém as tabelas de Identity, Expense, ExpenseCategory, ExpenseHistory e PaymentRecord. A categoria inicial `General` é um dado de domínio; não cria usuários. Revisão concorrente, pagamento único, histórico por revisão e FKs são definidos no mapeamento relacional.
+
+## Autenticação
+
+`POST /register` recebe email/password e cria conta sem roles. Um campo adicional de role não concede permissão. `POST /login?useCookies=false` recebe as credenciais e devolve accessToken/refreshToken nativos do Identity. Nas requisições protegidas, usar o accessToken no header Authorization como bearer; não tratá-lo como JWT.
+
+As cinco roles são Admin, Employee, Approver, Finance e Auditor. O seed não cria usuários desses perfis. A administração de roles será acrescentada em I03; após alterar roles, o usuário precisa fazer novo login. Não inserir token ou senha em exemplos versionados.
 
 ## Testes e qualidade
 
