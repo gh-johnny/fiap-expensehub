@@ -8,7 +8,7 @@ last-reviewed: 2026-10-03
 
 # Plano de implementação do ExpenseHub
 
-Este plano transforma o checkpoint de C# em entregas verificáveis por issue. O objetivo é implementar a API inteira, demonstrar autorização e alcançar score 100 no pipeline oficial, com documentação interativa e demonstração HTTP automatizada. Público: integrantes do grupo. As decisões técnicas e os extras são propostas do grupo, identificadas separadamente das exigências do professor. Plano revisado em 03/10/2026; execução iniciada. A fundação relacional está implementada e validada localmente; o [registro de execução](EXECUCAO.md) distingue resultados reais das entregas ainda previstas.
+Este plano transforma o checkpoint de C# em entregas verificáveis por issue. O objetivo é implementar a API inteira, demonstrar autorização e alcançar score 100 no pipeline oficial, com documentação interativa e demonstração HTTP automatizada. Público: integrantes do grupo. As decisões técnicas e os extras são propostas do grupo, identificadas separadamente das exigências do professor. Plano revisado em 03/10/2026; execução iniciada. As 13 rotas obrigatórias, os unitários e as provas SQLite estão implementados e validados localmente; o [registro de execução](EXECUCAO.md) distingue resultados reais das entregas ainda previstas.
 
 A prioridade escolhida pelo usuário é **API com documentação interativa e demonstração automatizada**. O escopo adicional inclui Scalar, provas de persistência/concorrência e relatórios reproduzíveis. O contrato das 13 rotas obrigatórias continua sendo a base da entrega.
 

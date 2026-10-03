@@ -38,11 +38,16 @@ A conta autenticada nesta sessão é João. Os commits usam sua configuração r
 | Preparação e planejamento | Repositório, ferramentas e PR de planejamento concluídos. |
 | I01 — fundação relacional | [PR #2](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/2), commit `5b6fa16cb98704ad3739beeddc0a3d35329e542b`; CI score 100 sem findings. Aberta, sem merge. |
 | I02 — Identity/bearer/seed | [PR #3](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/3), commit `2066fa0ff4704f26a2ea3a3ccf1acff312b747c9`, CI score 100. Prova 403 concluída em I03. |
-| I03 — administração | Implementada; 14 testes unitários e 59 verificações HTTP passaram, inclusive rollback real após falha do provider. |
-| I04–I08 — despesas | Ainda não implementadas. |
-| I09 — unitários próprios | 14 testes de administração passaram; matriz de despesas e transições pendente. |
-| I10 — qualidade final | Pendente do código e SHA finais; baseline e fundação local com score 100. |
-| Scalar, demo HTTP e integração SQLite | Ainda não implementados. |
+| I03 — administração | [PR #4](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/4), SHA e19c526; CI score 100, zero findings; 59 verificações HTTP. |
+| I04 — Draft | [PR #5](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/5), SHA 1dc5d44; CI score 100, zero findings; 36 verificações HTTP. |
+| I05 — envio/consulta | [PR #6](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/6), SHA 50c3b5f; CI score 100 com três warnings de imports, corrigidos em I07; 53 verificações HTTP. |
+| I06 — matriz | [PR #7](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/7), SHA 2384264; CI score 100 com os três warnings ainda presentes; matriz HTTP com 445 verificações. |
+| I07 — decisões | [PR #8](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/8), SHA fc21f19; CI score 100, zero findings/warnings; 40 verificações HTTP. |
+| I08 — pagamento/histórico | [PR #9](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/9), SHA a1ab905; CI score 100, zero findings; 65 verificações HTTP e rollback real. |
+| I09 — unitários próprios | [PR #10](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/10), SHA 6ea57f9; 111 testes; CI score 100, zero findings/warnings. |
+| M01 — integração SQLite | Oito testes passaram; formatação LINQ ajustada antes do commit. Provas adicionais, separadas dos unitários de I09. |
+| I10 — qualidade final | Pendente do SHA final integrado na main. |
+| Scalar e demo automatizada | Ainda não implementados. |
 | Participação individual dos três | Pendente de contribuições próprias de Matheus e André. |
 
 ## Evidências da fundação
@@ -58,7 +63,7 @@ Validações executadas:
 5. Testes do corretor: 15 unitários e 10 E2E passaram.
 6. Análise oficial executada localmente na árvore de trabalho: score 100/100, status passed.
 
-Essa análise local foi feita antes do commit da fundação; o SHA do relatório ainda identifica o HEAD de planejamento. Portanto, não é relatório de entrega do código novo. A PR de I01 precisa de seu próprio artefato de CI, e a entrega final precisa do relatório da main após o último merge.
+A análise local inicial foi feita antes do commit da fundação; não servia como artefato do código novo. O CI de push posterior confirmou o SHA de I01 com score 100. A entrega final ainda precisa do relatório da main após o último merge.
 
 O build ainda não comprova autorização, transições nem atomicidade real das operações futuras. Provas funcionais, unitários próprios, integração e demo serão acrescentados às respectivas entregas antes de serem declarados concluídos.
 
@@ -78,3 +83,16 @@ As rotas administrativas validam Admin no controller e no serviço. Ator imutáv
 Os 14 testes unitários próprios passaram sem EF, SQLite ou rede, com zero warnings. A prova HTTP local executou 59 verificações: 401 e header bearer, 403 para role ausente e cada perfil não administrativo, lista de contas sem hashes, mudança de roles com novo login, token antigo sem privilégios novos, conjunto vazio, roles desconhecidas/nulas, conta ausente e bloqueio de remoção do próprio Admin.
 
 Uma trigger temporária no SQLite descartável provocou falha na inserção da nova role após remoção da anterior. A API devolveu 500 genérico, com code/traceId; a role Employee e o concurrency stamp anteriores permaneceram intactos. Removida a trigger, a troca voltou a funcionar. Credenciais e tokens ficaram somente em memória. Essa prova externa será incorporada aos testes de integração reproduzíveis; não substitui sua entrega.
+
+
+## Evidências do fluxo completo e da integração
+
+As 13 rotas foram exercitadas por HTTP em bancos descartáveis. Os totais acima pertencem a provas por etapa; não representam uma única demo versionada. A matriz de leitura verificou as 32 combinações das cinco roles, despesas próprias/alheias e cinco estados. Os estados dessa matriz foram preparados diretamente no fixture externo; criação de contas e Drafts ocorreu por HTTP.
+
+Aprovação/reprovação verificaram autoação 403 mesmo com roles acumuladas, justificativa normalizada e repetição 409 sem evento extra. Approver isolado recebe 404 na leitura após decidir, mas continua recebendo 409 na repetição da ação. Pagamento deriva ator, valor e UTC; seu evento e PaymentRecord são gravados juntos. Falhas SQLite controladas demonstraram rollback da criação quando o histórico falha e preservação de Approved/revisão/histórico sem pagamento quando PaymentRecord falha.
+
+Unitários: 111 testes passaram sem warnings. Duas alterações temporárias em ExpenseAuthorization foram executadas fora dos commits: inversão da comparação de estado detectada por um teste e inversão da proibição de autoação detectada por cinco casos. Os arquivos foram restaurados e a suíte completa voltou a passar. Essa prova cobre esses dois defeitos simples; não constitui taxa geral de mutation testing.
+
+Integração: oito testes MSTest em projeto separado, com SQLite em arquivo exclusivo, Pooling=False, migrations reais e contextos novos para conferir resultados. Cobrem seed de um Admin/cinco roles, decimal máximo/DateOnly/UTC, projeções sem tracking e escopo SQL, FK não convertida indevidamente em 409, pagamento único, revisão desatualizada em dois contextos e rollback após falhas de histórico, pagamento e substituição de roles. As injeções de falha existem somente nos fixtures. Usuários adicionais nesses testes são dados de fixture; a API de demonstração os cria por HTTP.
+
+Os relatórios de I05 e I06 conservaram três warnings de imports. O [CI de I07](https://github.com/gh-johnny/checkpoint-expensehub-fiap/actions/runs/37099216907) confirma a correção com zero findings/warnings no SHA fc21f195e79523a14b6b8e77d1edd768973084a2. Os [CIs de I08](https://github.com/gh-johnny/checkpoint-expensehub-fiap/actions/runs/37099585828) e [I09](https://github.com/gh-johnny/checkpoint-expensehub-fiap/actions/runs/37099777114) também passaram com score 100 e zero findings.

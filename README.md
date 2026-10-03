@@ -8,7 +8,7 @@ last-reviewed: 2026-10-03
 
 # ExpenseHub — API de reembolsos
 
-Checkpoint de C# da FIAP: API ASP.NET Core 10 com persistência SQLite/EF Core, Identity bearer e regras de acesso por perfil, proprietário e estado. A execução está em andamento. Fundação relacional, migrations, Identity bearer, cadastro público e seed idempotente estão implementados. Administração de usuários e roles também está implementada; fluxos de despesas entram nas entregas seguintes.
+Checkpoint de C# da FIAP: API ASP.NET Core 10 com persistência SQLite/EF Core, Identity bearer e autorização por perfil, proprietário e estado. As 13 rotas obrigatórias, histórico e pagamento estão implementados. Documentação interativa, demo automatizada e integração final das PRs estão em andamento.
 
 | Integrante | RM |
 |---|---|
@@ -51,6 +51,26 @@ A migration contém as tabelas de Identity, Expense, ExpenseCategory, ExpenseHis
 
 As cinco roles são Admin, Employee, Approver, Finance e Auditor. O seed não cria usuários desses perfis. `GET /api/admin/users` lista contas e roles para Admin. `PUT /api/admin/users/{id}/roles` substitui o conjunto de roles em uma transação e retorna 204. Roles desconhecidas retornam 400; remover o próprio Admin retorna 403. Lista vazia é permitida para outro usuário. Após alterar roles, o usuário precisa fazer novo login. Não inserir token ou senha em exemplos versionados.
 
+## Despesas e histórico
+
+Criar e editar recebem somente `description`, `amount` e `expenseDate` (ISO `yyyy-MM-dd`). Descrição e justificativa são normalizadas com Trim e aceitam de 10 a 500 caracteres. Valor usa decimal, de 0,01 a 2.147.483.647; data não pode ser futura no calendário UTC do servidor. Owner, IDs, estado, atores e horários são definidos pela API.
+
+| Operação | Perfil e condição |
+|---|---|
+| POST /api/expenses | Employee; cria Draft e retorna 201 com Location. |
+| PUT /api/expenses/{id} | Employee proprietário; somente Draft. |
+| POST /api/expenses/{id}/submit | Employee proprietário; Draft → Submitted. |
+| POST /api/expenses/{id}/approve | Approver não proprietário; Submitted → Approved. |
+| POST /api/expenses/{id}/reject | Approver não proprietário; Submitted → Rejected; body com reason. |
+| POST /api/expenses/{id}/pay | Finance não proprietário; Approved → Paid. |
+| GET /api/expenses, GET /api/expenses/{id}, GET /api/expenses/{id}/history | União dos escopos de leitura descritos abaixo. |
+
+Employee lê todas as próprias despesas. Approver lê Submitted. Finance lê Approved/Paid. Auditor lê todas. Admin isolado administra contas, sem permissão implícita de despesas. Roles acumulam permissões, preservando a proibição de autoaprovação, autorreprovação e autopagamento. Auditor + Employee pode executar as ações concedidas por Employee.
+
+Histórico usa revisão crescente e registra criação, edição efetiva e transições, com ator e UTC. Edição idêntica retorna 200 sem revisão/evento novos. Paid e Rejected são finais. Repetir transição retorna 409, mesmo quando o Approver perdeu a leitura do recurso após decidir. Alteração, evento e pagamento são persistidos no mesmo SaveChanges. Índices únicos protegem histórico por revisão e pagamento por despesa.
+
+Erros usam ProblemDetails com code e traceId: 400 entrada inválida, 401 credencial ausente/inválida, 403 sem permissão, 404 ausente/invisível na leitura, 409 estado incompatível ou concorrência. Falhas inesperadas de provider continuam 500; somente conflitos conhecidos são traduzidos para 409.
+
 ## Testes e qualidade
 
 ```shell
@@ -60,7 +80,7 @@ pwsh -NoProfile -File ./tests/Invoke-CodeQuality.E2E.ps1
 pwsh -NoProfile -File ./scripts/Invoke-CodeQuality.ps1 -Ci
 ```
 
-O workflow oficial permanece intacto. O score está no artefato `code-quality-report`; verificar `score.final`, findings e commit analisado. Os 14 testes unitários próprios de administração usam um adaptador em memória, sem EF, banco ou rede. Uma prova HTTP local adicional executou 59 verificações de autenticação, roles, erros e rollback provocado em SQLite descartável. Os testes do fluxo de reembolso serão acrescentados nas próximas entregas.
+O workflow oficial permanece intacto. O score está no artefato `code-quality-report`; verificar `score.final`, findings e commit analisado. Os **111 testes unitários** verificam as regras com store substituto e relógio fixo, sem EF, banco ou rede. O projeto separado **ExpenseHub.IntegrationTests** contém oito provas SQLite reais: migrations/seed, round-trip e escopo SQL, constraints, concorrência entre contextos e rollback de roles, histórico e pagamento. Cada fixture usa um arquivo exclusivo com migrations; não usa EF InMemory. Duas inversões temporárias de regras foram detectadas pelos unitários e restauradas; detalhes no registro de execução.
 
 ## Documentação e participação
 
