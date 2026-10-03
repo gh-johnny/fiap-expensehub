@@ -89,6 +89,9 @@ public sealed class AuthorizationMatrixTests
             ApiProblemException denied = await Assert.ThrowsExactlyAsync<ApiProblemException>(
                 () => service.ListAsync(actor, CancellationToken.None));
             Assert.AreEqual(403, denied.StatusCode);
+            ApiProblemException deniedHistory = await Assert.ThrowsExactlyAsync<ApiProblemException>(
+                () => service.HistoryAsync(actor, Guid.NewGuid(), CancellationToken.None));
+            Assert.AreEqual(403, deniedHistory.StatusCode);
             return;
         }
 
@@ -100,12 +103,16 @@ public sealed class AuthorizationMatrixTests
             {
                 ExpenseResponse found = await service.FindAsync(actor, expense.Id, CancellationToken.None);
                 Assert.AreEqual(expense.Id, found.Id);
+                Assert.IsEmpty(await service.HistoryAsync(actor, expense.Id, CancellationToken.None));
             }
             else
             {
                 ApiProblemException invisible = await Assert.ThrowsExactlyAsync<ApiProblemException>(
                     () => service.FindAsync(actor, expense.Id, CancellationToken.None));
                 Assert.AreEqual(404, invisible.StatusCode);
+                ApiProblemException hiddenHistory = await Assert.ThrowsExactlyAsync<ApiProblemException>(
+                    () => service.HistoryAsync(actor, expense.Id, CancellationToken.None));
+                Assert.AreEqual(404, hiddenHistory.StatusCode);
             }
         }
     }
