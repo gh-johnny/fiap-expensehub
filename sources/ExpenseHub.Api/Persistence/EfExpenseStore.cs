@@ -1,15 +1,15 @@
-using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Linq.Expressions;
-using System.Threading;
+using System.Linq;
 using System.Threading.Tasks;
-using ExpenseHub.Api.Infrastructure;
+using System.Threading;
+using System;
 using ExpenseHub.Api.Contracts.Responses;
+using ExpenseHub.Api.Infrastructure;
 using ExpenseHub.Api.Models;
 using ExpenseHub.Api.Services;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 
 namespace ExpenseHub.Api.Persistence;
 
