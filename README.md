@@ -79,6 +79,8 @@ Na seção Identity, executar `/register` ou `/login` com useCookies=false. Sele
 
 A referência contém tags, IDs de operação únicos, DTOs de entrada/saída, estados por nome, limites de campos e exemplos válidos/inválidos. ProblemDetails documenta code e traceId. Verificações HTTP conferiram as 13 operações obrigatórias; Chromium carregou a interface sem erros de JavaScript e executou login e consulta administrativa protegida com 200.
 
+O [arquivo HTTP manual](sources/ExpenseHub.Api/ExpenseHub.Api.http) oferece os dois fluxos e as 13 rotas, com variáveis de ambiente e respostas nomeadas de login/criação. O [guia](docs/DEMO.md#arquivo-http-manual) explica a preparação dos perfis e a ordem das chamadas.
+
 ## Demo automatizada
 
 ```shell

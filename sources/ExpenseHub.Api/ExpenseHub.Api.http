@@ -1,9 +1,117 @@
-@ExpenseHub_Api_HostAddress = http://localhost:5245
+# VS Code REST Client: values come from the editor process environment.
+# Register each profile, list its ID as Admin, grant its role, then log in again.
+@baseUrl = {{$processEnv EXPENSEHUB_BASE_URL}}
+@accountEmail = {{$processEnv EXPENSEHUB_ACCOUNT_EMAIL}}
+@accountPassword = {{$processEnv EXPENSEHUB_ACCOUNT_PASSWORD}}
+@expenseDate = {{$processEnv EXPENSEHUB_EXPENSE_DATE}}
 
-GET {{ExpenseHub_Api_HostAddress}}/health
+### Health
+GET {{baseUrl}}/health
 Accept: application/json
 
-###
+### Register a profile without roles
+POST {{baseUrl}}/register
+Content-Type: application/json
 
-# Os endpoints do checkpoint estão definidos em docs/REQUISITOS.md.
-# Implemente e adicione aqui as requisições usadas para validar cada issue.
+{ "email": "{{accountEmail}}", "password": "{{accountPassword}}" }
+
+### Admin login
+# @name adminLogin
+POST {{baseUrl}}/login?useCookies=false
+Content-Type: application/json
+
+{ "email": "{{$processEnv Seed__AdminEmail}}", "password": "{{$processEnv Seed__AdminPassword}}" }
+
+### Find the registered account ID
+GET {{baseUrl}}/api/admin/users
+Authorization: Bearer {{adminLogin.response.body.$.accessToken}}
+
+### Replace that account's roles (Employee, Approver or Finance)
+PUT {{baseUrl}}/api/admin/users/{{$processEnv EXPENSEHUB_ACCOUNT_ID}}/roles
+Authorization: Bearer {{adminLogin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "roles": ["{{$processEnv EXPENSEHUB_ACCOUNT_ROLE}}"] }
+
+### Employee login after role assignment
+# @name employeeLogin
+POST {{baseUrl}}/login?useCookies=false
+Content-Type: application/json
+
+{ "email": "{{$processEnv EXPENSEHUB_EMPLOYEE_EMAIL}}", "password": "{{accountPassword}}" }
+
+### Approver login (a different account)
+# @name approverLogin
+POST {{baseUrl}}/login?useCookies=false
+Content-Type: application/json
+
+{ "email": "{{$processEnv EXPENSEHUB_APPROVER_EMAIL}}", "password": "{{accountPassword}}" }
+
+### Finance login (a different account)
+# @name financeLogin
+POST {{baseUrl}}/login?useCookies=false
+Content-Type: application/json
+
+{ "email": "{{$processEnv EXPENSEHUB_FINANCE_EMAIL}}", "password": "{{accountPassword}}" }
+
+### Create Draft
+# @name createExpense
+POST {{baseUrl}}/api/expenses
+Authorization: Bearer {{employeeLogin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "description": "Client train ticket expense", "amount": 25.50, "expenseDate": "{{expenseDate}}" }
+
+### Edit the owned Draft
+PUT {{baseUrl}}/api/expenses/{{createExpense.response.body.$.id}}
+Authorization: Bearer {{employeeLogin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "description": "Updated train ticket expense", "amount": 30.25, "expenseDate": "{{expenseDate}}" }
+
+### List visible expenses
+GET {{baseUrl}}/api/expenses
+Authorization: Bearer {{employeeLogin.response.body.$.accessToken}}
+
+### Read the owned expense
+GET {{baseUrl}}/api/expenses/{{createExpense.response.body.$.id}}
+Authorization: Bearer {{employeeLogin.response.body.$.accessToken}}
+
+### Submit Draft
+POST {{baseUrl}}/api/expenses/{{createExpense.response.body.$.id}}/submit
+Authorization: Bearer {{employeeLogin.response.body.$.accessToken}}
+
+### Approve as a different account
+POST {{baseUrl}}/api/expenses/{{createExpense.response.body.$.id}}/approve
+Authorization: Bearer {{approverLogin.response.body.$.accessToken}}
+
+### Pay as a different account
+POST {{baseUrl}}/api/expenses/{{createExpense.response.body.$.id}}/pay
+Authorization: Bearer {{financeLogin.response.body.$.accessToken}}
+
+### Read the complete Paid timeline as owner
+GET {{baseUrl}}/api/expenses/{{createExpense.response.body.$.id}}/history
+Authorization: Bearer {{employeeLogin.response.body.$.accessToken}}
+
+### Create a separate expense for rejection
+# @name createRejectedExpense
+POST {{baseUrl}}/api/expenses
+Authorization: Bearer {{employeeLogin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "description": "Meal receipt expense", "amount": 18.50, "expenseDate": "{{expenseDate}}" }
+
+### Submit the second expense
+POST {{baseUrl}}/api/expenses/{{createRejectedExpense.response.body.$.id}}/submit
+Authorization: Bearer {{employeeLogin.response.body.$.accessToken}}
+
+### Reject with a meaningful reason
+POST {{baseUrl}}/api/expenses/{{createRejectedExpense.response.body.$.id}}/reject
+Authorization: Bearer {{approverLogin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "reason": "Receipt is missing" }
+
+### Read the complete Rejected timeline as owner
+GET {{baseUrl}}/api/expenses/{{createRejectedExpense.response.body.$.id}}/history
+Authorization: Bearer {{employeeLogin.response.body.$.accessToken}}

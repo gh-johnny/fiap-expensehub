@@ -24,7 +24,7 @@ Pré-requisitos: SDK .NET 10 completo com runtime ASP.NET Core 10, PowerShell 7 
 pwsh -NoProfile -File ./scripts/Invoke-ExpenseHubVerification.ps1
 ```
 
-O executor restaura a ferramenta dotnet-ef e a solução, compila, executa os 111 unitários e oito testes SQLite, aplica migrations a um arquivo temporário exclusivo, inicia a API em Development e chama a demo. Porta local é selecionada durante a execução; a prontidão é verificada por /health. O Admin inicial recebe uma credencial aleatória gerada em memória. A configuração é passada pelo ambiente, sem argumentos com senhas.
+O executor restaura a ferramenta dotnet-ef e a solução, compila, executa os 111 unitários e oito testes SQLite, aplica migrations a um arquivo temporário exclusivo, inicia a API em Development e chama a demo. Porta local é selecionada durante a execução; a prontidão é verificada por /health. O Admin inicial recebe uma credencial aleatória gerada em memória. A configuração é passada pelo ambiente, sem argumentos com senhas. Em GitHub Actions, as credenciais geradas são registradas em add-mask antes das requisições.
 
 O executor encerra somente seu processo de API, restaura as variáveis de ambiente e apaga seu diretório temporário ao concluir. Não usa o banco padrão da aplicação. Logs do host e resultados temporários de testes não entram no artefato de demonstração.
 
@@ -60,6 +60,21 @@ pwsh -NoProfile -File ./scripts/Invoke-ExpenseHubDemo.ps1 -BaseUrl http://localh
 ```
 
 Esse comando não inicia nem encerra o host e não limpa o banco existente. Preferir o executor completo para isolamento. Senhas, tokens, headers e corpos HTTP não são gravados nos relatórios. Os artefatos estão ignorados pelo Git.
+
+## Arquivo HTTP manual
+
+[ExpenseHub.Api.http](../sources/ExpenseHub.Api/ExpenseHub.Api.http) contém as 13 rotas obrigatórias e os dois fluxos completos, para a extensão [REST Client do VS Code](https://github.com/Huachao/vscode-restclient#request-variables). Variáveis do processo do editor fornecem a configuração; respostas nomeadas de login fornecem os tokens. Enviar cada login antes das requisições que referenciam seu accessToken, e enviar cada criação antes das ações que referenciam seu ID.
+
+| Variáveis de ambiente | Conteúdo |
+|---|---|
+| EXPENSEHUB_BASE_URL | URL do host de teste, sem barra final. |
+| Seed__AdminEmail, Seed__AdminPassword | Credenciais atuais do Admin inicial. |
+| EXPENSEHUB_ACCOUNT_EMAIL, EXPENSEHUB_ACCOUNT_PASSWORD | Conta a cadastrar; senha externa compartilhada pelos três perfis deste exemplo de teste. |
+| EXPENSEHUB_ACCOUNT_ID, EXPENSEHUB_ACCOUNT_ROLE | ID retornado pela listagem Admin e role a conceder. |
+| EXPENSEHUB_EMPLOYEE_EMAIL, EXPENSEHUB_APPROVER_EMAIL, EXPENSEHUB_FINANCE_EMAIL | Emails de três contas distintas. |
+| EXPENSEHUB_EXPENSE_DATE | Data ISO yyyy-MM-dd, sem ser futura no calendário UTC. |
+
+Preparar Employee, Approver e Finance repetindo cadastro, listagem Admin e atribuição para cada conta, com as variáveis correspondentes. Depois, executar os três logins nomeados e as requisições na ordem: criar/editar/listar/ler/enviar/aprovar/pagar/histórico; criar outra despesa/enviar/reprovar/histórico. As variáveis devem estar disponíveis ao processo do editor. Nenhuma senha/token precisa ser inserida no arquivo. A conferência local enviou 26 requisições reais a partir dos templates e das referências de resposta; a interface da extensão não foi automatizada.
 
 ## Workflow e alcance das provas
 

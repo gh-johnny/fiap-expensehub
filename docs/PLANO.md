@@ -8,7 +8,7 @@ last-reviewed: 2026-10-03
 
 # Plano de implementação do ExpenseHub
 
-Este plano transforma o checkpoint de C# em entregas verificáveis por issue. O objetivo é implementar a API inteira, demonstrar autorização e alcançar score 100 no pipeline oficial, com documentação interativa e demonstração HTTP automatizada. Público: integrantes do grupo. As decisões técnicas e os extras são propostas do grupo, identificadas separadamente das exigências do professor. Plano revisado em 03/10/2026; execução iniciada. As 13 rotas obrigatórias, os unitários e as provas SQLite estão implementados e validados localmente; o [registro de execução](EXECUCAO.md) distingue resultados reais das entregas ainda previstas.
+Este plano transforma o checkpoint de C# em entregas verificáveis por issue. O objetivo é implementar a API inteira, demonstrar autorização e alcançar score 100 no pipeline oficial, com documentação interativa e demonstração HTTP automatizada. Público: integrantes do grupo. As decisões técnicas e os extras são propostas do grupo, identificadas separadamente das exigências do professor. Plano revisado em 03/10/2026; execução iniciada. As 13 rotas obrigatórias, os unitários, as provas SQLite, Scalar e a demo estão implementados; CI de M03 confirmou score 100 e 104 cenários HTTP; o [registro de execução](EXECUCAO.md) distingue resultados reais das entregas ainda previstas.
 
 A prioridade escolhida pelo usuário é **API com documentação interativa e demonstração automatizada**. O escopo adicional inclui Scalar, provas de persistência/concorrência e relatórios reproduzíveis. O contrato das 13 rotas obrigatórias continua sendo a base da entrega.
 
@@ -507,27 +507,27 @@ Nenhum extra altera uma rota obrigatória sem preservar seu contrato. Cada entre
 
 - [ ] Cadastro do grupo confirmado ou regularizado com o professor.
 - [ ] Repositório público por template, colaboradores e professor com acesso.
-- [ ] Nome completo e RM dos três integrantes no cabeçalho da entrega/README.
+- [x] Nome completo e RM dos três integrantes no cabeçalho da entrega/README.
 - [ ] Mais de um commit real por integrante preservado na main.
 - [ ] Pacotes de João, Matheus e André concluídos/revistos conforme a divisão de trabalho.
 - [ ] Três e-mails de autoria associados aos perfis corretos, sem trailers Co-authored-by ou autoria de IA.
 - [ ] Dez issues com PR/evidência correspondente.
 - [ ] SDK/runtime documentados; restore/build/test normais em clone limpo.
-- [ ] Banco persistente e criado por procedimento reproduzível.
-- [ ] Seed somente de um Admin inicial, idempotente e sem credenciais versionadas.
-- [ ] Cadastro, bearer, roles e novo login demonstrados.
-- [ ] Todos os 13 endpoints com positivos, negativos e códigos HTTP corretos.
-- [ ] Roles acumuladas, ownership, estados, Admin/Auditor e isolamento verificados.
-- [ ] Histórico completo, pagamento único e falhas sem gravação parcial.
-- [ ] Unitários próprios significativos, sem banco/rede, detectando regressões.
-- [ ] Controles e testes do corretor preservados e executados.
+- [x] Banco persistente e criado por procedimento reproduzível.
+- [x] Seed somente de um Admin inicial, idempotente e sem credenciais versionadas.
+- [x] Cadastro, bearer, roles e novo login demonstrados.
+- [x] Todos os 13 endpoints com positivos, negativos e códigos HTTP corretos.
+- [x] Roles acumuladas, ownership, estados, Admin/Auditor e isolamento verificados.
+- [x] Histórico completo, pagamento único e falhas sem gravação parcial.
+- [x] Unitários próprios significativos, sem banco/rede, detectando regressões.
+- [x] Controles e testes do corretor preservados e executados.
 - [ ] Score 100, zero erros/warnings e sem findings bloqueantes no SHA final.
-- [ ] README com provider, setup, migrations, configuração, payloads e comandos.
-- [ ] Arquivo HTTP utilizável sem senha/token literal.
-- [ ] Scalar funciona no navegador com login e chamada autenticada; schema OpenAPI confere as 13 rotas.
-- [ ] Bearer do Identity documentado corretamente, com register/login públicos e sem tokens preenchidos.
-- [ ] Demo HTTP automatizada passa e falha quando uma assertiva obrigatória diverge.
-- [ ] Provas SQLite demonstram concorrência, unicidade e rollback sem dependências externas.
-- [ ] Relatórios da demo identificam SHA/cenários sem expor credenciais.
-- [ ] Workflow adicional de demo executado sem modificar o workflow oficial.
+- [x] README com provider, setup, migrations, configuração, payloads e comandos.
+- [x] Arquivo HTTP utilizável sem senha/token literal.
+- [x] Scalar funciona no navegador com login e chamada autenticada; schema OpenAPI confere as 13 rotas.
+- [x] Bearer do Identity documentado corretamente, com register/login públicos e sem tokens preenchidos.
+- [x] Demo HTTP automatizada passa e falha quando uma assertiva obrigatória diverge.
+- [x] Provas SQLite demonstram concorrência, unicidade e rollback sem dependências externas.
+- [x] Relatórios da demo identificam SHA/cenários sem expor credenciais.
+- [x] Workflow adicional de demo executado sem modificar o workflow oficial.
 - [ ] URL pública, SHA exato e links dos workflows registrados na entrega.
