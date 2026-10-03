@@ -8,7 +8,7 @@ last-reviewed: 2026-10-03
 
 # Plano de implementação do ExpenseHub
 
-Este plano transforma o checkpoint de C# em entregas verificáveis por issue. O objetivo é implementar a API inteira, demonstrar autorização e alcançar score 100 no pipeline oficial, com documentação interativa e demonstração HTTP automatizada. Público: integrantes do grupo. As decisões técnicas e os extras são propostas do grupo, identificadas separadamente das exigências do professor. Plano revisado em 03/10/2026; implementação ainda não iniciada.
+Este plano transforma o checkpoint de C# em entregas verificáveis por issue. O objetivo é implementar a API inteira, demonstrar autorização e alcançar score 100 no pipeline oficial, com documentação interativa e demonstração HTTP automatizada. Público: integrantes do grupo. As decisões técnicas e os extras são propostas do grupo, identificadas separadamente das exigências do professor. Plano revisado em 03/10/2026; execução iniciada. A fundação relacional está implementada e validada localmente; o [registro de execução](EXECUCAO.md) distingue resultados reais das entregas ainda previstas.
 
 A prioridade escolhida pelo usuário é **API com documentação interativa e demonstração automatizada**. O escopo adicional inclui Scalar, provas de persistência/concorrência e relatórios reproduzíveis. O contrato das 13 rotas obrigatórias continua sendo a base da entrega.
 
@@ -25,7 +25,7 @@ A execução por integrante está detalhada na [divisão de trabalho e autoria](
 A referência inspecionada é o [template original](https://github.com/Racass/checkpoint-csharpracass-expensehub/tree/58c8405387f5e9ae9725ad964917e7634a870b74), SHA `58c8405387f5e9ae9725ad964917e7634a870b74`. Foram consultados README, enunciado, requisitos, matriz, rubrica, processo GitHub, uso de IA, as dez issues, analisadores, workflow, script de qualidade, schema e testes do corretor. Revalidar o backlog original antes de implementar cada issue.
 
 - O repositório identifica a atividade como Checkpoint 2. A pasta local `cp5` não altera a especificação.
-- A pasta estava vazia e sem Git. A inspeção ocorreu em cópia temporária; ainda não existe repositório público do grupo criado nesta sessão.
+- Em 02/10 a pasta estava vazia e sem Git, e a inspeção ocorreu em cópia temporária. Em 03/10 foi criado o [repositório público do grupo](https://github.com/gh-johnny/checkpoint-expensehub-fiap) por template, com SHA base `8f4dac931306f061ba2a3c4aeac1ceac5d520b9e`.
 - O template contém API `net10.0`, MSTest 4.0.2, `/health` e OpenAPI. Domínio, persistência, Identity e testes funcionais ainda precisam ser implementados.
 - A base de conhecimento contém somente seu README; nenhum fato ou runbook aplicável foi encontrado.
 - Entrega: **13/10/2026**, conforme o [enunciado](https://github.com/Racass/checkpoint-csharpracass-expensehub/blob/main/docs/ENUNCIADO.md). Horário não informado; proposta: concluir em 12/10.
@@ -39,7 +39,7 @@ O diagnóstico temporário `-p:AllowMissingPrunePackageData=true`, sem editar ar
 
 O [workflow oficial do mesmo SHA](https://github.com/Racass/checkpoint-csharpracass-expensehub/actions/runs/36162397495) terminou com sucesso. O artefato `code-quality-report`, ID `10876561860`, foi lido: score **100**, nenhum finding, SDK **10.0.401**, Gitleaks **8.30.1**. Esse resultado valida o ponto de partida, não as futuras funcionalidades.
 
-Primeira ação técnica: instalar SDK 10.0.401 completo e runtime ASP.NET Core 10 em ambiente local ao usuário, preparar PowerShell/Gitleaks e repetir os comandos normais. Não adicionar ao projeto a propriedade usada apenas no diagnóstico. Nenhuma configuração global de SDK/Git foi alterada nesta sessão.
+Ação técnica realizada em 03/10: SDK 10.0.401 e runtime ASP.NET Core 10.0.12 instalados fora do repositório, junto de PowerShell 7.6.6 e Gitleaks 8.30.1. Os comandos normais passaram usando essa instalação no PATH da sessão. O diagnóstico antigo acima permanece como registro do ambiente inicial; a propriedade de workaround não entrou no projeto. Nenhuma configuração global de SDK/Git foi alterada.
 
 ## Critério de conclusão
 

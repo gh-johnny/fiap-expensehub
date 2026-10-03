@@ -8,7 +8,7 @@ last-reviewed: 2026-10-03
 
 # Divisão de trabalho e autoria do ExpenseHub
 
-Plano de execução para João, Matheus e André, com carga estimada igual, contribuições técnicas individuais, revisão cruzada e commits próprios. Complementa o [plano técnico](PLANO.md), que continua sendo a referência para contratos, matriz de autorização, estados e critérios de qualidade. Público: os três integrantes. Estado em 03/10/2026: planejamento; nenhum pacote abaixo está declarado implementado.
+Plano de execução para João, Matheus e André, com carga estimada igual, contribuições técnicas individuais, revisão cruzada e commits próprios. Complementa o [plano técnico](PLANO.md), que continua sendo a referência para contratos, matriz de autorização, estados e critérios de qualidade. Público: os três integrantes. Execução iniciada em 03/10/2026. Os pacotes abaixo descrevem a distribuição planejada; o [registro de execução](EXECUCAO.md) identifica entregas e validações reais, inclusive a autoria efetivamente utilizada.
 
 A entrega principal é a API obrigatória. Os extras escolhidos são documentação interativa com Scalar, demonstração HTTP automatizada e provas de persistência em SQLite. Frontend, deploy e paginação não entram na distribuição principal.
 
@@ -355,7 +355,7 @@ Mínimo de qualidade por commit: diff coeso, nomes/estilo da baseline, nenhuma c
 
 ## 10. Cronograma e dependências
 
-Ponto de partida em 03/10: ainda é necessário preparar ambiente e criar o repositório do grupo por template. Datas são metas, não registro de atividades realizadas. Os testes relevantes acompanham cada dia de implementação.
+Ponto de partida em 03/10: ambiente completo e repositório público por template preparados; fundação validada localmente. Datas abaixo são metas, não registro de atividades realizadas. Os testes relevantes acompanham cada dia de implementação; resultados efetivos constam no registro de execução.
 
 | Data/meta | João | Matheus | André | Condição de saída |
 |---|---|---|---|---|
@@ -424,4 +424,4 @@ Validação comum: restore/build/test normais, qualidade da baseline, unitários
 
 Fontes de planejamento revalidadas em 03/10/2026 no SHA upstream `58c8405387f5e9ae9725ad964917e7634a870b74`: [enunciado](https://github.com/Racass/checkpoint-csharpracass-expensehub/blob/58c8405387f5e9ae9725ad964917e7634a870b74/docs/ENUNCIADO.md), [rubrica](https://github.com/Racass/checkpoint-csharpracass-expensehub/blob/58c8405387f5e9ae9725ad964917e7634a870b74/docs/RUBRICA.md), processo GitHub e política de IA citados acima. Os pesos oficiais somam 100%; as 120 unidades de esforço e todos os pacotes desta divisão são estimativas do grupo.
 
-O [plano técnico](PLANO.md) define detalhes dos 13 endpoints, modelo, atomicidade, limites, testes, OpenAPI, demo e corretor. A pasta local ainda não contém implementação nem repositório Git do grupo. Os caminhos de código deste documento são entregas previstas, e os comandos de Git/validação passam a ser executáveis após a preparação correspondente.
+O [plano técnico](PLANO.md) define detalhes dos 13 endpoints, modelo, atomicidade, limites, testes, OpenAPI, demo e corretor. A pasta local já contém Git e a implementação inicial. Os caminhos de código deste documento são entregas previstas ou em execução; somente o registro de execução e evidências vinculadas permitem declará-las concluídas.
