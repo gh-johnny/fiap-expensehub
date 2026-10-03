@@ -18,9 +18,9 @@ A entrega principal é a API obrigatória. Os extras escolhidos são documentaç
 |---|---|---|---|
 | João Marcelo Furtado Romero | RM555199 | gh-johnny | jmfurtadoromero@gmail.com |
 | Matheus Rivera Montovaneli | RM555499 | imneli | contatodoneli@gmail.com |
-| André Nakamatsu Rocha | RM555004 | Login ainda não informado | andrenakarocha@hotmail.com |
+| André Nakamatsu Rocha | RM555004 | andrenakarocha | andrenakarocha@hotmail.com |
 
-Os handles e e-mails acima foram informados pelo usuário; associação e verificação nas contas ainda não foram confirmadas. André precisa informar o login antes da inclusão como colaborador. Os três devem possuir acesso ao repositório público do grupo e registrar contribuições próprias na `main`.
+Os nomes/e-mails e os logins de João e Matheus foram informados pelo usuário. Os commits de João estão associados a gh-johnny. O login [andrenakarocha](https://github.com/andrenakarocha) foi identificado em consulta autenticada à API pública de usuários do GitHub, que retornou exatamente o e-mail informado; a consulta anônima retorna email=null. Isso identifica a conta de André, sem comprovar contribuição sua. A associação do e-mail de Matheus ainda não foi verificada. Os três devem possuir acesso ao repositório e registrar contribuições próprias na `main`.
 
 O [processo oficial](https://github.com/Racass/checkpoint-csharpracass-expensehub/blob/58c8405387f5e9ae9725ad964917e7634a870b74/docs/PROCESSO-GITHUB.md) exige **mais de um commit por integrante** e evolução real. A [política de IA](https://github.com/Racass/checkpoint-csharpracass-expensehub/blob/58c8405387f5e9ae9725ad964917e7634a870b74/docs/USO-DE-IA.md) exige revisão e validação e não admite falsificação de autoria ou histórico. Por isso, cada aluno executa, compreende e registra sua contribuição; trocar o nome de um único executor entre três perfis não atende ao critério individual.
 

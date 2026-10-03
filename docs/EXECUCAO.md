@@ -22,7 +22,7 @@ Repositório público, criado por template e sem fork: [gh-johnny/checkpoint-exp
 
 A [PR de planejamento #1](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/1) foi integrada após aprovação humana, com merge `ec3955913abdc6f772f1c31d871771d8fe551708`. Seu commit de trabalho é `f6535c68e87caf550b9223ac393ccb9c0912b457`.
 
-A conta autenticada nesta sessão é João. Os commits usam sua configuração real, sem coautoria de IA. A participação de Matheus e André permanece pendente de contribuições próprias; o desenvolvimento automatizado não cria evidência de autoria deles. O login GitHub de André ainda não foi informado.
+A conta autenticada nesta sessão é João. Os commits usam sua configuração real, sem coautoria de IA. A participação de Matheus e André permanece pendente de contribuições próprias; o desenvolvimento automatizado não cria evidência de autoria deles. O login de André, andrenakarocha, foi identificado pela correspondência exata do e-mail em consulta autenticada à API pública de usuários do GitHub; não foram enviados convites nesta consulta.
 
 ## Ambiente verificado
 
@@ -46,7 +46,7 @@ A conta autenticada nesta sessão é João. Os commits usam sua configuração r
 | I08 — pagamento/histórico | [PR #9](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/9), SHA a1ab905; CI score 100, zero findings; 65 verificações HTTP e rollback real. |
 | I09 — unitários próprios | [PR #10](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/10), SHA 6ea57f9; 111 testes; CI score 100, zero findings/warnings. |
 | M01 — integração SQLite | [PR #11](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/11), SHA 30bbd4b; oito testes; CI score 100, zero findings/warnings. |
-| I10 — qualidade final | Pendente do SHA final integrado na main. |
+| I10 — qualidade final | [PR #14](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/14): candidato 6256221 passou score 100 sem findings/warnings e demo 104/104; ainda depende do SHA final integrado na main. |
 | M02 — Scalar/OpenAPI | [PR #12](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/12), SHA 39dcc7a; CI score 100, zero findings/warnings; Chromium executou login e consulta protegida com 200. |
 | M03 — demo automatizada/CI adicional | [PR #13](https://github.com/gh-johnny/checkpoint-expensehub-fiap/pull/13), SHA 4590d4e; CI oficial score 100 sem findings/warnings; demo push e PR passaram 104/104, com SHA exato e artefatos sanitizados. |
 | Participação individual dos três | Pendente de contribuições próprias de Matheus e André. |
@@ -122,3 +122,12 @@ A entrega I10 acrescenta o arquivo HTTP manual completo e mascaramento add-mask 
 O código e os extras estão implementados; somente a PR de planejamento foi integrada. PRs de implementação continuam abertas para integração após aprovação. A qualidade e a demo do SHA final da main ainda precisam ser conferidas depois dos merges. A conclusão acadêmica também depende das contribuições próprias de Matheus e André e do cadastro do grupo, sem atribuição retroativa de autoria.
 
 A demo também foi executada com credencial Admin deliberadamente incorreta: quatro cenários anteriores passaram e o quinto falhou, com 401 observado contra 200 esperado, saída 1 e relatório failed. O add-mask foi emitido para a credencial gerada; ela permaneceu ausente dos relatórios. Uma falha de ferramenta no bootstrap produziu relatório de fase tool restore e apagou o diretório temporário. Essas provas validam falha por assertiva HTTP e falha anterior ao host.
+
+
+## Auditoria adicional do plano
+
+As três falhas previstas na seção de I09 foram aplicadas uma de cada vez em cópia descartável do SHA 6256221a6b4e317dcf3490a76ac30acc6b8773a0. A cópia original passou nos 111 unitários. Remover o bloqueio de autoação fez falhar cinco casos de OwnerCannotDecideEvenWithAllRoles; permitir nova aprovação de Approved fez falhar ApprovalDoesNotReuseReadVisibility; reduzir MinimumLength da justificativa de 10 para 5 fez falhar o caso de nove caracteres de RejectionReasonBoundaries. Os TRX confirmam falhas de assertivas, não de compilação. Hashes dos arquivos originais permaneceram iguais; a cópia foi removida. Isso comprova detecção desses três defeitos específicos, sem alegar uma taxa geral de mutation testing.
+
+Uma prova HTTP adicional reiniciou o processo da API usando o mesmo SQLite depois de cadastrar Employee por HTTP e criar Draft com valor 25,501. Após o reinício, novo login com as credenciais existentes funcionou e as respostas de despesa/histórico ficaram idênticas. A senha Admin existente continuou válida mesmo com outra senha de bootstrap no segundo início. O banco manteve dois usuários (Admin e Employee HTTP), uma atribuição Admin e cinco roles. A prova externa registrou somente resultados; não persistiu credenciais ou bearer.
+
+A última revalidação read-only confirmou PRs #2–#14 abertas, controles originais intactos, workflows do candidato completed/success e main ainda no merge de planejamento ec3955913abdc6f772f1c31d871771d8fe551708. Estas evidências adicionais não representam integração na main nem participação de outros autores.
