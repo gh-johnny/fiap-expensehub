@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Security.Claims;
-using ExpenseHub.Api.Infrastructure;
-using ExpenseHub.Api.Services;
+using ExpenseHub.Core.Infrastructure;
+using ExpenseHub.Core.Services;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace ExpenseHub.UnitTests.Administration;

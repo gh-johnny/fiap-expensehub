@@ -35,7 +35,7 @@ Provider: `Microsoft.EntityFrameworkCore.Sqlite` **10.0.12**. Identity EF e Desi
 A conexão padrão é `Data Source=expensehub.db`. Para outro arquivo, configurar `ConnectionStrings__ExpenseHub` no ambiente. Não versionar credenciais, banco, WAL ou SHM. Não é necessário um servidor de banco para compilar.
 
 ```shell
-dotnet ef database update --project ./sources/ExpenseHub.Api --startup-project ./sources/ExpenseHub.Api
+dotnet ef database update --project ./sources/ExpenseHub.Core --startup-project ./sources/ExpenseHub.Api
 dotnet run --project ./sources/ExpenseHub.Api --no-launch-profile
 ```
 

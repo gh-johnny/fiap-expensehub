@@ -60,7 +60,7 @@ try {
     Set-VerificationEnvironment "Seed__AdminPassword" $credential
 
     $phase = "migration"
-    Invoke-Dotnet -Arguments @("ef", "database", "update", "--project", "sources/ExpenseHub.Api", "--startup-project", "sources/ExpenseHub.Api", "--no-build")
+    Invoke-Dotnet -Arguments @("ef", "database", "update", "--project", "sources/ExpenseHub.Core", "--startup-project", "sources/ExpenseHub.Api", "--no-build")
     $phase = "host startup"
     $apiDirectory = Join-Path $repositoryRoot "sources/ExpenseHub.Api"
     $apiDll = Join-Path $apiDirectory "bin/Debug/net10.0/ExpenseHub.Api.dll"

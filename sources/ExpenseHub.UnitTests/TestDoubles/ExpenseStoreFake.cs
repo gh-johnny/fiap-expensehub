@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using ExpenseHub.Api.Contracts.Responses;
-using ExpenseHub.Api.Models;
-using ExpenseHub.Api.Services;
+using ExpenseHub.Core.Contracts.Responses;
+using ExpenseHub.Core.Models;
+using ExpenseHub.Core.Services;
 
 namespace ExpenseHub.UnitTests.TestDoubles;
 
