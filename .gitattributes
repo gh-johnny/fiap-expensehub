@@ -1,0 +1,22 @@
+# Fixa quebras de linha para evitar conflitos entre alunos de sistemas operacionais diferentes.
+* text=auto eol=lf
+
+# Arquivos de código-fonte — sempre LF
+*.cs        text eol=lf
+*.csproj    text eol=lf
+*.sln       text eol=lf
+*.json      text eol=lf
+*.md        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.editorconfig text eol=lf
+
+# Arquivos binários — nunca alterar
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.pdf       binary
+*.dll       binary
+*.exe       binary

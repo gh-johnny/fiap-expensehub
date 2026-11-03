@@ -1,0 +1,276 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Racass/csharp-aulas-template/docs/code-quality-report.schema.json",
+  "title": "FIAP C# Code Quality Report",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "generatedAtUtc",
+    "repository",
+    "status",
+    "exitCode",
+    "score",
+    "summary",
+    "tools",
+    "projects",
+    "findings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "2.0"
+    },
+    "generatedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "repository": {
+      "type": "object",
+      "required": ["root", "branch", "commit"],
+      "properties": {
+        "root": { "type": "string" },
+        "branch": { "type": ["string", "null"] },
+        "commit": { "type": ["string", "null"] }
+      }
+    },
+    "status": {
+      "enum": ["passed", "failed", "not-scored"]
+    },
+    "exitCode": {
+      "type": "integer"
+    },
+    "score": {
+      "type": "object",
+      "required": ["raw", "final", "maximum", "categories", "capsApplied"],
+      "properties": {
+        "raw": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+        "final": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+        "maximum": { "const": 100 },
+        "categories": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "allOf": [
+            {
+              "contains": {
+                "type": "object",
+                "properties": { "id": { "const": "build" } },
+                "required": ["id"]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": { "id": { "const": "security" } },
+                "required": ["id"]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": { "id": { "const": "hygiene" } },
+                "required": ["id"]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": { "id": { "const": "style" } },
+                "required": ["id"]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": { "id": { "const": "best-practices" } },
+                "required": ["id"]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            }
+          ],
+          "items": {
+            "type": "object",
+            "required": ["id", "maximum", "score", "deductions"],
+            "properties": {
+              "id": {
+                "enum": [
+                  "build",
+                  "security",
+                  "hygiene",
+                  "style",
+                  "best-practices"
+                ]
+              },
+              "maximum": { "const": 20 },
+              "score": { "type": ["integer", "null"], "minimum": 0, "maximum": 20 },
+              "deductions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["ruleId", "points", "occurrences"],
+                  "properties": {
+                    "ruleId": { "type": "string" },
+                    "points": { "type": "integer", "minimum": 0 },
+                    "occurrences": { "type": "integer", "minimum": 1 }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "capsApplied": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": ["reason", "maximum"],
+                "properties": {
+                  "reason": { "const": "secret-detected" },
+                  "maximum": { "const": 9 }
+                }
+              },
+              {
+                "type": "object",
+                "required": ["reason", "maximum"],
+                "properties": {
+                  "reason": { "const": "build-failed" },
+                  "maximum": { "const": 59 }
+                }
+              },
+              {
+                "type": "object",
+                "required": ["reason", "maximum"],
+                "properties": {
+                  "reason": { "const": "forbidden-file-tracked" },
+                  "maximum": { "const": 59 }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "projects",
+        "findings",
+        "occurrences",
+        "uniqueRules",
+        "blocking",
+        "errors",
+        "warnings",
+        "information"
+      ],
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "version", "available"],
+        "properties": {
+          "name": { "type": "string" },
+          "version": { "type": ["string", "null"] },
+          "available": { "type": "boolean" }
+        }
+      }
+    },
+    "projects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "name",
+          "targetFrameworks",
+          "restore",
+          "build",
+          "format"
+        ]
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "category",
+          "severity",
+          "blocking",
+          "title",
+          "message",
+          "file",
+          "line",
+          "column",
+          "project",
+          "occurrenceCount",
+          "locations",
+          "recommendation",
+          "documentationUrl"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "source": {
+            "enum": [
+              "compiler",
+              "analyzer",
+              "format",
+              "gitleaks",
+              "fiap",
+              "test"
+            ]
+          },
+          "category": {
+            "enum": [
+              "build",
+              "security",
+              "hygiene",
+              "style",
+              "best-practices"
+            ]
+          },
+          "severity": {
+            "enum": ["error", "warning", "info"]
+          },
+          "blocking": { "type": "boolean" },
+          "title": { "type": "string" },
+          "message": { "type": "string" },
+          "file": { "type": ["string", "null"] },
+          "line": { "type": ["integer", "null"], "minimum": 1 },
+          "column": { "type": ["integer", "null"], "minimum": 1 },
+          "project": { "type": ["string", "null"] },
+          "occurrenceCount": { "type": "integer", "minimum": 1 },
+          "locations": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["line", "column"],
+              "properties": {
+                "line": { "type": ["integer", "null"], "minimum": 1 },
+                "column": { "type": ["integer", "null"], "minimum": 1 }
+              }
+            }
+          },
+          "recommendation": { "type": ["string", "null"] },
+          "documentationUrl": { "type": ["string", "null"], "format": "uri" }
+        }
+      }
+    }
+  }
+}

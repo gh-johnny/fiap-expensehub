@@ -1,0 +1,52 @@
+# .NET / Visual Studio
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+### CUSTOM - Ignore Migrations ####
+sources/MyPDV/Migrations/
+
+# Build artifacts
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+publish/
+artifacts/
+*.pdb
+*.dll
+*.exe
+
+# Rider
+.idea/
+
+# VS Code (mantido no .gitignore por padrão, mesmo sem uso oficial)
+.vscode/
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+
+# Sistema
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.log
+
+# Segredos — NUNCA commitar
+*.env
+appsettings.Development.json
+appsettings.Local.json
+secrets.json

@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="ExpenseHub.Api/ExpenseHub.Api.csproj" />
+  <Project Path="ExpenseHub.UnitTests/ExpenseHub.UnitTests.csproj" />
+</Solution>

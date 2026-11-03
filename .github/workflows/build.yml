@@ -1,0 +1,73 @@
+name: code-quality
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["main", "master"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Build, security & code quality
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            6.0.x
+            7.0.x
+            8.0.x
+            9.0.x
+            10.0.x
+
+      - name: Install Gitleaks
+        shell: bash
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+        run: |
+          curl --fail --silent --show-error --location \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            --output /tmp/gitleaks.tar.gz
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          sudo install /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Run quality script tests
+        shell: pwsh
+        run: |
+          ./tests/Invoke-CodeQuality.Unit.Tests.ps1
+          ./tests/Invoke-CodeQuality.E2E.ps1
+
+      - name: Run quality analysis
+        id: quality
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          ./scripts/Invoke-CodeQuality.ps1 -Ci
+
+      - name: Upload quality reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: code-quality-report
+          path: artifacts/code-quality/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Enforce blocking findings
+        if: always() && steps.quality.outcome == 'failure'
+        shell: bash
+        run: |
+          echo "Blocking findings were detected. Read the job summary or download the report artifact."
+          exit 1

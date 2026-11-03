@@ -1,0 +1,9 @@
+@ExpenseHub_Api_HostAddress = http://localhost:5245
+
+GET {{ExpenseHub_Api_HostAddress}}/health
+Accept: application/json
+
+###
+
+# Os endpoints do checkpoint estão definidos em docs/REQUISITOS.md.
+# Implemente e adicione aqui as requisições usadas para validar cada issue.

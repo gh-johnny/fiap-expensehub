@@ -1,0 +1,38 @@
+<Project>
+  <!--
+    Aplicado automaticamente a TODOS os projetos abaixo desta pasta.
+    Não é necessário adicionar isso a cada .csproj.
+
+    OBS.: TargetFramework NÃO é definido aqui — cada projeto define o
+    seu (o `dotnet new console` usa a versão do SDK instalada na sua
+    máquina).
+  -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+
+    <!-- Nullable habilitado: melhores warnings e código mais seguro. -->
+    <Nullable>enable</Nullable>
+
+    <!-- Warnings não são tratados como erro. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+
+    <!-- Nível de warnings da linguagem. -->
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>Recommended</AnalysisMode>
+
+    <!-- Analisadores oficiais e regras do .editorconfig também no build. -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <!-- Desabilita implicit usings (System, System.Linq, etc.). -->
+    <ImplicitUsings>disable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="StyleCop.Analyzers"
+                      Version="1.1.118"
+                      PrivateAssets="all"
+                      IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+  </ItemGroup>
+</Project>
