@@ -16,8 +16,8 @@ O `CLAUDE.md` importa este arquivo; **este é o documento de regras de referênc
 | Integrante | RM | Frente no CP3 |
 |---|---|---|
 | João Marcelo Furtado Romero | RM555199 | Fundação, CP3-I01, CP3-I03 |
-| Matheus Rivera Montovaneli | RM555499 | CP3-I02, CP3-I04 — [plano](docs/plans/matheus-cp3-i02-i04.md) |
-| André Nakamatsu Rocha | RM555004 | CP3-I05, CP3-I06 — [plano](docs/plans/andre-cp3-i05-i06.md) |
+| Matheus Rivera Montovaneli | RM555499 | CP3-I02, CP3-I04 |
+| André Nakamatsu Rocha | RM555004 | CP3-I05, CP3-I06 |
 
 CP3-I07 (qualidade) é transversal: cada pessoa responde pela qualidade do próprio diff.
 
@@ -71,7 +71,6 @@ sources/
 ├── ExpenseHub.slnx
 ├── ExpenseHub.Core/              # domínio, serviços, EF Core (DbContext, migrations, stores)
 ├── ExpenseHub.Api/               # host HTTP: controllers, ProblemDetails, OpenAPI/Scalar
-├── ExpenseHub.Worker/            # host do worker: consumo RabbitMQ e processamento de relatórios (CP3)
 ├── ExpenseHub.UnitTests/         # MSTest, sem I/O real — gate de cobertura
 └── ExpenseHub.IntegrationTests/  # SQLite real e provas relacionais
 ```

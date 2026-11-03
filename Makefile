@@ -96,7 +96,7 @@ verify: build format coverage test-integration ## Everything a PR must pass: bui
 env: .env ## Create .env from .env.example with random local secrets (never committed)
 
 .PHONY: up
-up: .env ## Build and start RabbitMQ, API and worker in the background
+up: .env ## Build images and start the stack in the background, waiting for health checks
 	$(COMPOSE) up -d --build --wait
 
 .PHONY: down
