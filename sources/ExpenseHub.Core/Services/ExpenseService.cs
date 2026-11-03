@@ -33,13 +33,13 @@ public sealed class ExpenseService
     public async Task<ExpenseResponse> CreateAsync(CurrentActor actor, ExpenseDraftRequest request, CancellationToken cancellationToken)
     {
         ExpenseAuthorization.RequireRole(actor, RoleNames.Employee);
-        ValidateDraft(request);
+        DateOnly expenseDate = ValidateDraft(request);
         var expense = new Expense
         {
             OwnerId = actor.UserId,
             Description = request.Description,
             Amount = request.Amount,
-            ExpenseDate = request.ExpenseDate!.Value,
+            ExpenseDate = expenseDate,
             CreatedAtUtc = _clock.GetUtcNow().UtcDateTime,
         };
         _store.AddExpense(expense);
@@ -59,8 +59,8 @@ public sealed class ExpenseService
         ExpenseAuthorization.RequireRole(actor, RoleNames.Employee);
         Expense expense = await LoadAsync(id, cancellationToken);
         ExpenseAuthorization.RequireOwnDraft(actor, expense);
-        ValidateDraft(request);
-        if (expense.Description == request.Description && expense.Amount == request.Amount && expense.ExpenseDate == request.ExpenseDate)
+        DateOnly expenseDate = ValidateDraft(request);
+        if (expense.Description == request.Description && expense.Amount == request.Amount && expense.ExpenseDate == expenseDate)
         {
             return View(expense);
         }
@@ -70,7 +70,7 @@ public sealed class ExpenseService
         DateOnly oldDate = expense.ExpenseDate;
         expense.Description = request.Description;
         expense.Amount = request.Amount;
-        expense.ExpenseDate = request.ExpenseDate!.Value;
+        expense.ExpenseDate = expenseDate;
         expense.Revision++;
         ExpenseHistory history = NewHistory(expense, actor, "Updated", ExpenseStatus.Draft);
         history.PreviousDescription = oldDescription;
@@ -196,17 +196,21 @@ public sealed class ExpenseService
         => new(expense.Id, expense.OwnerId, expense.Description, expense.Amount, expense.ExpenseDate,
             expense.Status.ToString(), expense.CategoryId, expense.CreatedAtUtc, expense.Revision);
 
-    private void ValidateDraft(ExpenseDraftRequest request)
+    private DateOnly ValidateDraft(ExpenseDraftRequest request)
     {
         if (!Validator.TryValidateObject(request, new ValidationContext(request), new List<ValidationResult>(), validateAllProperties: true))
         {
             throw new ApiProblemException(400, "request.invalid", "The draft fields are invalid.");
         }
 
-        if (request.ExpenseDate > DateOnly.FromDateTime(_clock.GetUtcNow().UtcDateTime))
+        // [Required] was enforced above, so the date is present from here on.
+        DateOnly expenseDate = request.ExpenseDate.GetValueOrDefault();
+        if (expenseDate > DateOnly.FromDateTime(_clock.GetUtcNow().UtcDateTime))
         {
             throw new ApiProblemException(400, "expense.invalid_date", "The expense date cannot be in the future.");
         }
+
+        return expenseDate;
     }
 
     private async Task<Expense> LoadAsync(Guid id, CancellationToken cancellationToken)
