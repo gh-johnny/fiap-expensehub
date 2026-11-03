@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+.cache/
+.git/
+.github/
+artifacts/
+docs/
+tests/
+**/*.db
+**/*.db-shm
+**/*.db-wal
+.env
+*.md
