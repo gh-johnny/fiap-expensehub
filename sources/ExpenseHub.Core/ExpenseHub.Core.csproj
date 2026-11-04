@@ -8,6 +8,8 @@
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.12" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.12" />
+    <PackageReference Include="RabbitMQ.Client" Version="7.2.1" />
   </ItemGroup>
 
 </Project>
