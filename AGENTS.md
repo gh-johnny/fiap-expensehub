@@ -71,6 +71,7 @@ sources/
 ├── ExpenseHub.slnx
 ├── ExpenseHub.Core/              # domínio, serviços, EF Core (DbContext, migrations, stores)
 ├── ExpenseHub.Api/               # host HTTP: controllers, ProblemDetails, OpenAPI/Scalar
+├── ExpenseHub.Worker/            # host do worker: consumo RabbitMQ com ack manual e processamento de relatórios
 ├── ExpenseHub.UnitTests/         # MSTest, sem I/O real — gate de cobertura
 └── ExpenseHub.IntegrationTests/  # SQLite real e provas relacionais
 ```

@@ -41,7 +41,7 @@ Requisitos no host: **git**, **Docker com Compose v2** e **make**. Nenhum SDK .N
 git clone git@github.com:gh-johnny/fiap-expensehub.git
 cd fiap-expensehub
 make env      # cria .env com segredos locais aleatórios (ignorado pelo Git)
-make up       # constrói as imagens e sobe RabbitMQ + API, aguardando os health checks
+make up       # constrói as imagens e sobe RabbitMQ + API + worker, aguardando os health checks
 make ps       # estado e saúde dos serviços
 ```
 
@@ -62,15 +62,16 @@ flowchart LR
     U[Usuário<br/>Scalar, .http] -->|HTTP + bearer| API[ExpenseHub.Api<br/>controllers, ProblemDetails]
     API --> CORE[ExpenseHub.Core<br/>domínio, serviços, EF Core]
     CORE --> DB[(SQLite em volume<br/>/data/expensehub.db)]
-    API -.->|publica reportId - CP3| MQ[(RabbitMQ<br/>fila durável)]
-    MQ -.->|consome - CP3| W[ExpenseHub.Worker<br/>calcula e persiste]
-    W -.-> CORE
+    API -->|publica reportId<br/>publisher confirms| MQ[(RabbitMQ<br/>fila quorum durável)]
+    MQ -->|consome, ack após salvar| W[ExpenseHub.Worker<br/>calcula e persiste]
+    W --> CORE
 ```
 
 | Projeto | Responsabilidade |
 |---|---|
 | `ExpenseHub.Core` | Modelos, regras de autorização e de estado, contratos, `ExpenseHubDbContext`, migrations e stores EF Core. Compartilhado pela API e pelo worker. |
 | `ExpenseHub.Api` | Host HTTP: controllers finos, `ProblemDetails`, auditoria de requisições, OpenAPI/Scalar, seed e migrations no startup. |
+| `ExpenseHub.Worker` | Host do worker: consome a fila com ack manual, processa via `ReportProcessor` (Core) e persiste no mesmo SQLite. |
 | `ExpenseHub.UnitTests` | MSTest sem banco, rede ou broker reais; contém o gate de cobertura. |
 | `ExpenseHub.IntegrationTests` | Provas com SQLite real: migrations, seed, constraints, concorrência e rollback. |
 
@@ -132,6 +133,9 @@ Configuração da aplicação (variáveis de ambiente no formato `Secao__Chave`)
 | `RabbitMq__UserName`, `RabbitMq__Password` | — (vêm do `.env` no Compose) | Credenciais do broker |
 | `RabbitMq__ReportQueue` | `expensehub.reports.requested` | Fila quorum durável das solicitações |
 | `RabbitMq__PublishTimeout` | `00:00:05` | Espera máxima pela confirmação antes do 503 |
+| `ReportProcessing__MaxAttempts` | `5` | Inícios de processamento antes de `Failed` (`report.attempts_exhausted`) |
+| `ReportProcessing__RetryDelay` | `00:00:05` | Pausa antes de devolver à fila uma mensagem com falha transitória |
+| `ReportProcessing__Prefetch` | `1` | Entregas sem `ack` mantidas pelo worker |
 | `ASPNETCORE_ENVIRONMENT` | `Development` no Compose | Habilita `/docs` e `/openapi/v1.json` |
 
 ## API — identidade e administração
@@ -256,8 +260,47 @@ Verificado no Compose: anônimo → 401; período invertido, data inválida e `s
 `Location` e uma mensagem `Ready` na fila quorum; detalhe e Excel de outro usuário → 404; Excel `Pending` → 409;
 broker parado → 503 com `reportId` em ~5 s; broker de volta → 202 de novo, sem reiniciar a API.
 
-> O processamento (worker, confirmação de consumo, idempotência e falhas) chega com CP3-I03; a matriz de
-> perfil × escopo (`Mine` para Employee, `Global` para Auditor) chega com CP3-I02. Ver [andamento](#andamento-do-cp3).
+### Processamento no worker
+
+`ExpenseHub.Worker` consome a fila com **ack manual** e `prefetch` 1. Para cada mensagem:
+
+1. Corpo inválido (JSON quebrado, id vazio) → `ack` e log; não há estado para alterar.
+2. Carrega a solicitação **do banco** pelo `reportId`. Período, escopo e solicitante nunca vêm da mensagem; campos
+   extras como `ownerId` são ignorados. Inexistente → `ack` e log.
+3. `Completed` ou `Failed` → **duplicata**: `ack` sem nenhum novo efeito. A proteção é o próprio estado persistido,
+   então sobrevive a reinícios do worker.
+4. `Pending` ou `Processing` → grava `Processing` (`startedAt` só na primeira vez, `attempts + 1`). Uma solicitação
+   deixada em `Processing` por uma queda é **retomada** na reentrega.
+5. Lê os reembolsos elegíveis **naquele momento** (filtro em SQL) e grava `Completed` + `result` + `completedAt` num
+   único `SaveChanges`. Só então faz o `ack`.
+
+| Situação | Tratamento |
+|---|---|
+| Banco ocupado ou indisponível, timeout, I/O, conflito de revisão | **Transitória**: `nack` com requeue depois de `ReportProcessing__RetryDelay` (5 s); nada é marcado como `Failed` |
+| Erro de cálculo ou de dados | **Definitiva**: grava `Failed` com `report.calculation_failed` e mensagem sanitizada, depois `ack` (sem reencaminhamento infinito) |
+| Mais de `ReportProcessing__MaxAttempts` (5) inícios | `Failed` com `report.attempts_exhausted`, mesmo que o worker caia sempre no mesmo ponto |
+| Falha ao gravar o próprio `Failed` | A exceção sobe e a entrega **não** recebe `ack`; volta à fila |
+| Worker encerrando no meio do processamento | Sem `ack`: o broker reentrega depois que o canal fecha |
+| Duas entregas simultâneas | `Revision` é token de concorrência: a perdedora recebe conflito, volta à fila e vira duplicata |
+
+**Retomada de `Processing`:** basta uma nova entrega do mesmo `{"reportId"}`. Ela acontece sozinha depois de uma queda
+do worker (mensagem `Unacked` volta a `Ready`). Se a mensagem se perdeu (por exemplo, a fila quorum descartou após o
+`delivery-limit` padrão de 20 reentregas), republique o payload pelo painel do RabbitMQ
+(*Queues → expensehub.reports.requested → Publish message*). O processamento continua de onde parou e nunca duplica
+o resultado.
+
+Logs correlacionados por `reportId` (escopo `ReportId:<id>` e campo estruturado) para publicação, recebimento,
+início, conclusão, duplicata, reentrega e falha, sem tokens, senhas ou connection strings.
+
+Verificado no Compose:
+- **Fluxo normal:** 3 reembolsos de R$ 100, R$ 50 e R$ 25 → `Completed` com 3 / R$ 175 e `.xlsx` válido.
+- **Worker parado:** a solicitação fica `Pending`; ao religar o worker, o mesmo id chega a `Completed`.
+- **Duplicata:** depois de reiniciar o worker, a mensagem republicada pelo painel é registrada como duplicata;
+  `completedAt` e `generatedAt` ficam idênticos.
+- **Recriação:** depois de recriar API e worker, o mesmo token e o resultado anterior continuam válidos.
+
+> A matriz de perfil × escopo (`Mine` para Employee, `Global` para Auditor, demais → 403) chega com CP3-I02. Ver
+> [andamento](#andamento-do-cp3).
 
 ## Testes, cobertura e qualidade
 
@@ -268,8 +311,8 @@ broker parado → 503 com `reportId` em ~5 s; broker de volta → 202 de novo, s
 | HTTP (`scripts/Invoke-ExpenseHubVerification.ps1`) | 104 cenários contra a API real em SQLite descartável; relatórios sanitizados em `artifacts/demo/`. | `make demo` |
 
 **Gate de cobertura unitária:** ≥ 95 % de linhas **e** de branches no total da solução (`make coverage`; o build
-falha abaixo disso). Estado atual: **100 % de linhas e 96,7 % de branches** (Core: 100 % / 100 %), com 194 testes
-unitários e 12 de integração. As exclusões
+falha abaixo disso). Estado atual: **100 % de linhas e 97,2 % de branches** (Core: 100 % / 100 %), com 212 testes
+unitários e 14 de integração. As exclusões
 ficam declaradas só em `ExpenseHub.UnitTests.csproj`: migrations, código gerado, `Program.cs` (composition root,
 exercitado pelos smoke tests nos containers) e adaptadores de I/O real (`ExpenseHub.Core.Persistence`, RabbitMQ),
 cobertos pela suíte de integração. Métodos `async` **não** são excluídos.
@@ -303,6 +346,11 @@ Cada requisito aponta para os testes que o comprovam. Linhas novas entram no mes
 | Relatório — Excel | `.xlsx` real (ZIP), metadados, cinco estados e total em células numéricas iguais ao resultado salvo; vazio com zeros; 409 fora de `Completed`; 404 alheio; nome `report-{id}.xlsx` | `Reports/ReportWorkbookTests`, `Reports/ReportServiceTests`, `Api/ReportsControllerTests` | — | — |
 | Mensagem | Corpo só com `reportId`; JSON inválido, vazio ou id zero rejeitados; campos extras (ex.: `ownerId`) ignorados | `Reports/ReportRequestedMessageTests` | — | — |
 | Contrato HTTP de relatórios | 202 + `Location`, 503/409 documentados no OpenAPI, exemplos de corpo | `Api/ReportsControllerTests`, `Api/OpenApiDocumentTests` | — | — |
+| Worker — conclusão | `Pending` → `Processing` → `Completed` com resultado, `startedAt`, `completedAt`, `attempts`; dados lidos no processamento; escopo e solicitante persistidos | `Reports/ReportProcessorTests` | `RelationalReportProcessingTests` (estado e resultado no mesmo commit) | — |
+| Worker — idempotência | `Completed`/`Failed` reentregues sem novo efeito, inclusive com um processor novo (worker reiniciado); alteração posterior de reembolso não muda o salvo | `Reports/ReportProcessorTests` | `RelationalReportProcessingTests` | — |
+| Worker — retomada e limite | `Processing` retomado preservando `startedAt`; tentativas esgotadas → `Failed` sem calcular | `Reports/ReportProcessorTests` | — | — |
+| Worker — falhas | Transitórias (DB, timeout, I/O, concorrência) → retry sem `Failed`; definitiva → `Failed` sanitizado; falha ao gravar `Failed` propaga (sem `ack`); cancelamento não vira falha | `Reports/ReportProcessorTests` | `RelationalReportProcessingTests` (conflito de revisão real) | — |
+| Worker — logs | Toda entrada correlacionada pelo `reportId`; resultado igual com log desligado | `Reports/ReportProcessorTests` | — | — |
 
 Execução em matriz no CI: cada suíte roda em **Ubuntu, Windows e macOS** (ver abaixo).
 
@@ -311,7 +359,7 @@ Execução em matriz no CI: cada suíte roda em **Ubuntu, Windows e macOS** (ver
 | Workflow | Jobs |
 |---|---|
 | `code-quality` (`build.yml`, do professor, inalterado) | Build, Gitleaks e score de qualidade |
-| `ci` (`ci.yml`) | `make verify` no Ubuntu (gate de cobertura + resumo no job); matriz `{Unit, Integration} × {Ubuntu, Windows, macOS}`; build das imagens |
+| `ci` (`ci.yml`) | `make verify` no Ubuntu (gate de cobertura + resumo no job); matriz `{Unit, Integration} × {Ubuntu, Windows, macOS}`; build das imagens da API e do worker |
 | `expensehub-demo` (`demo.yml`) | Build, testes e os 104 cenários HTTP, com relatório como artefato |
 
 ## Extras
@@ -330,14 +378,16 @@ Além do exigido, sempre com um extra por entrega:
 | Segredos locais gerados automaticamente | `make env` |
 | Fila quorum, check constraints de estado, escopo e período no banco, e publicação com tempo máximo mesmo com o broker fora | `RabbitMqReportPublisher`, migration `AddReportRequests` |
 | Exemplo do professor reproduzido em teste unitário **e** em SQL real | `ReportCalculatorTests`, `RelationalReportTests` |
+| Limite de tentativas persistido (`attempts`), classificação transitória × definitiva e corrida resolvida por token de revisão | `ReportProcessor`, `RelationalReportProcessingTests` |
+| Logs do worker com `[LoggerMessage]` (source generator) e escopo `ReportId` | `ReportConsumer`, `ReportProcessor` |
 
 ## Andamento do CP3
 
 | Issue | Frente | Responsável | Estado |
 |---|---|---|---|
 | Fundação | Core compartilhado, containers, Makefile, cobertura, CI em matriz | João | Concluída (PR #2) |
-| [CP3-I01](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/11) | Contrato, cálculo, persistência, Excel e publicação confirmada | João | Concluída neste PR |
-| [CP3-I03](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/13) | RabbitMQ, worker e idempotência | João | Planejada |
+| [CP3-I01](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/11) | Contrato, cálculo, persistência, Excel e publicação confirmada | João | Concluída (PR #3) |
+| [CP3-I03](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/13) | Worker, ack após persistir, idempotência e falhas | João | Concluída neste PR |
 | [CP3-I02](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/12) | Autorização e isolamento | Matheus | Planejada |
 | [CP3-I04](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/14) | Testes próprios significativos | Matheus | Planejada |
 | [CP3-I05](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/15) | Imagens publicadas e Compose reproduzível | André | Planejada |
