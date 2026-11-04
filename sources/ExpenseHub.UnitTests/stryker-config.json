@@ -1,0 +1,9 @@
+{
+  "stryker-config": {
+    "project": "ExpenseHub.Core.csproj",
+    "test-projects": ["ExpenseHub.UnitTests.csproj"],
+    "mutate": ["**/Reports/**/*.cs"],
+    "reporters": ["html", "json", "progress", "cleartext"],
+    "thresholds": { "high": 95, "low": 90, "break": 95 }
+  }
+}

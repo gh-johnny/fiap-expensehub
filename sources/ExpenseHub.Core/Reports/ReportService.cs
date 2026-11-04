@@ -40,13 +40,16 @@ public sealed class ReportService
     /// <param name="request">The period and scope.</param>
     /// <param name="cancellationToken">Request cancellation.</param>
     /// <returns>The Pending envelope.</returns>
-    /// <exception cref="ApiProblemException">400 for invalid input; 503 with the persisted id when unconfirmed.</exception>
+    /// <exception cref="ApiProblemException">
+    /// 400 for invalid input; 403 when the profile does not grant the scope; 503 with the persisted id when unconfirmed.
+    /// </exception>
     public async Task<ReportResponse> RequestAsync(CurrentActor actor, CreateReportRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(actor);
         ArgumentNullException.ThrowIfNull(request);
         (DateOnly from, DateOnly to) = ValidatePeriod(request);
         ReportScope scope = ParseScope(request.Scope);
+        ReportAuthorization.EnsureCanRequest(actor, scope);
         var report = new ReportRequest
         {
             RequesterId = actor.UserId,

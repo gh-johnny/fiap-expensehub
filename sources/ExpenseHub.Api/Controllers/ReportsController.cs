@@ -8,6 +8,7 @@ using ExpenseHub.Core.Contracts.Responses;
 using ExpenseHub.Core.Reports;
 using ExpenseHub.Core.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ExpenseHub.Api.Controllers;
@@ -32,6 +33,10 @@ public sealed class ReportsController : ControllerBase
     /// <param name="cancellationToken">Request cancellation.</param>
     /// <returns>202 with the Pending envelope and the detail location.</returns>
     [HttpPost]
+    [Authorize(Roles = RoleNames.Employee + "," + RoleNames.Auditor)]
+    [EndpointDescription("Mine requires Employee; Global requires Auditor; Admin, Approver and Finance grant neither. "
+        + "A profile without the scope's role receives 403 with code report.scope_forbidden and nothing is persisted or "
+        + "queued. The requester is always the authenticated user, never a client field.")]
     [ProducesResponseType<ReportResponse>(202)]
     public async Task<IActionResult> Create(CreateReportRequest request, CancellationToken cancellationToken)
     {

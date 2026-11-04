@@ -117,6 +117,21 @@ public sealed class OpenApiDocumentTests
         Assert.IsTrue(examples.TryGetProperty("invalid", out _));
     }
 
+    /// <summary>The report request documents the profile x scope rule: a Global example for Auditor and the 403 denial.</summary>
+    [TestMethod]
+    public void ReportRequestDocumentsTheScopePermissions()
+    {
+        JsonElement post = Operation("/api/reports", "post");
+        Assert.IsTrue(post.GetProperty("responses").TryGetProperty("403", out _));
+        string description = post.GetProperty("description").GetString()!;
+        Assert.Contains("Mine requires Employee", description);
+        Assert.Contains("Global requires Auditor", description);
+        Assert.Contains("report.scope_forbidden", description);
+        JsonElement global = Body("/api/reports", "post").GetProperty("examples").GetProperty("global");
+        Assert.AreEqual("Global", global.GetProperty("value").GetProperty("scope").GetString());
+        Assert.Contains("Auditor", global.GetProperty("summary").GetString()!);
+    }
+
     /// <summary>Reads document 404 but never 400 or 409.</summary>
     [TestMethod]
     public void ProtectedReadOmitsMutationStatuses()

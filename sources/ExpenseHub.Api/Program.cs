@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using ExpenseHub.Api.Documentation;
@@ -12,7 +11,6 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -60,34 +58,7 @@ internal static class Program
         builder.Services.AddScoped<IReportPublisher, RabbitMqReportPublisher>();
         builder.Services.AddScoped<IReportStore, EfReportStore>();
         builder.Services.AddScoped<ReportService>();
-        builder.Services.AddExceptionHandler<ApiExceptionHandler>();
-        builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
-        {
-            context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
-            context.ProblemDetails.Extensions.TryAdd("code", context.ProblemDetails.Status switch
-            {
-                400 => "request.invalid",
-                401 => "auth.required",
-                403 => "auth.forbidden",
-                404 => "resource.not_found",
-                _ => "server.unexpected",
-            });
-        });
-        builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
-        {
-            options.InvalidModelStateResponseFactory = context =>
-            {
-                var problem = new ValidationProblemDetails(context.ModelState)
-                {
-                    Status = 400,
-                    Title = "The request is invalid.",
-                    Instance = context.HttpContext.Request.Path,
-                };
-                problem.Extensions["code"] = "request.invalid";
-                problem.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
-                return new BadRequestObjectResult(problem);
-            };
-        });
+        builder.Services.AddApiControllers();
 
         WebApplication app = builder.Build();
         if (builder.Configuration.GetValue<bool>("Database:ApplyMigrations"))
@@ -96,19 +67,7 @@ internal static class Program
         }
 
         await IdentitySeed.InitializeAsync(app.Services, builder.Configuration, app.Lifetime.ApplicationStopping);
-        app.UseExceptionHandler();
-        app.UseStatusCodePages(async context =>
-        {
-            var writer = context.HttpContext.RequestServices.GetRequiredService<IProblemDetailsService>();
-            await writer.TryWriteAsync(new ProblemDetailsContext
-            {
-                HttpContext = context.HttpContext,
-                ProblemDetails = new ProblemDetails { Status = context.HttpContext.Response.StatusCode },
-            });
-        });
-        app.UseAuthentication();
-        app.UseMiddleware<RequestAuditMiddleware>();
-        app.UseAuthorization();
+        app.UseApiPipeline();
         app.MapIdentityApi<IdentityUser>();
         app.MapControllers();
 

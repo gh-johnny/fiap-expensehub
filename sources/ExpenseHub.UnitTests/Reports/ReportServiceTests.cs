@@ -61,7 +61,8 @@ public sealed class ReportServiceTests
     {
         CreateReportRequest request = Valid();
         request.Scope = scope;
-        ReportResponse response = await Service().RequestAsync(Actor("requester"), request, CancellationToken.None);
+        var actor = new CurrentActor("requester", new List<string> { RoleNames.Employee, RoleNames.Auditor });
+        ReportResponse response = await Service().RequestAsync(actor, request, CancellationToken.None);
         Assert.AreEqual(expected, response.Scope);
     }
 
