@@ -1,6 +1,7 @@
 <Solution>
   <Project Path="ExpenseHub.Core/ExpenseHub.Core.csproj" />
   <Project Path="ExpenseHub.Api/ExpenseHub.Api.csproj" />
+  <Project Path="ExpenseHub.Worker/ExpenseHub.Worker.csproj" />
   <Project Path="ExpenseHub.UnitTests/ExpenseHub.UnitTests.csproj" />
   <Project Path="ExpenseHub.IntegrationTests/ExpenseHub.IntegrationTests.csproj" />
 </Solution>

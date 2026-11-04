@@ -10,8 +10,8 @@ FIAP — C# Software Development · Professor Rafael Cassiolato · especificaç�
 | Integrante | RM | Frente no CP3 |
 |---|---|---|
 | João Marcelo Furtado Romero | RM555199 | Fundação, CP3-I01, CP3-I03 |
-| Matheus Rivera Montovaneli | RM555499 | CP3-I02, CP3-I04 |
-| André Nakamatsu Rocha | RM555004 | CP3-I05, CP3-I06 |
+| Matheus Rivera Montovaneli | RM555499 | CP3-I02, CP3-I04 — [plano](docs/plans/matheus-cp3-i02-i04.md) |
+| André Nakamatsu Rocha | RM555004 | CP3-I05, CP3-I06 — [plano](docs/plans/andre-cp3-i05-i06.md) |
 
 > **Documento vivo.** Este README é a única documentação do projeto. Todo PR que muda comportamento, contrato,
 > comando ou configuração atualiza este arquivo no mesmo PR. Regras de trabalho: [`AGENTS.md`](AGENTS.md).
@@ -41,7 +41,7 @@ Requisitos no host: **git**, **Docker com Compose v2** e **make**. Nenhum SDK .N
 git clone git@github.com:gh-johnny/fiap-expensehub.git
 cd fiap-expensehub
 make env      # cria .env com segredos locais aleatórios (ignorado pelo Git)
-make up       # constrói as imagens e sobe RabbitMQ + API, aguardando os health checks
+make up       # constrói as imagens e sobe RabbitMQ + API + worker, aguardando os health checks
 make ps       # estado e saúde dos serviços
 ```
 
@@ -62,15 +62,16 @@ flowchart LR
     U[Usuário<br/>Scalar, .http] -->|HTTP + bearer| API[ExpenseHub.Api<br/>controllers, ProblemDetails]
     API --> CORE[ExpenseHub.Core<br/>domínio, serviços, EF Core]
     CORE --> DB[(SQLite em volume<br/>/data/expensehub.db)]
-    API -.->|publica reportId - CP3| MQ[(RabbitMQ<br/>fila durável)]
-    MQ -.->|consome - CP3| W[ExpenseHub.Worker<br/>calcula e persiste]
-    W -.-> CORE
+    API -->|publica reportId<br/>publisher confirms| MQ[(RabbitMQ<br/>fila quorum durável)]
+    MQ -->|consome, ack após salvar| W[ExpenseHub.Worker<br/>calcula e persiste]
+    W --> CORE
 ```
 
 | Projeto | Responsabilidade |
 |---|---|
 | `ExpenseHub.Core` | Modelos, regras de autorização e de estado, contratos, `ExpenseHubDbContext`, migrations e stores EF Core. Compartilhado pela API e pelo worker. |
 | `ExpenseHub.Api` | Host HTTP: controllers finos, `ProblemDetails`, auditoria de requisições, OpenAPI/Scalar, seed e migrations no startup. |
+| `ExpenseHub.Worker` | Host do worker: consome a fila com ack manual, processa via `ReportProcessor` (Core) e persiste no mesmo SQLite. |
 | `ExpenseHub.UnitTests` | MSTest sem banco, rede ou broker reais; contém o gate de cobertura. |
 | `ExpenseHub.IntegrationTests` | Provas com SQLite real: migrations, seed, constraints, concorrência e rollback. |
 
@@ -128,6 +129,13 @@ Configuração da aplicação (variáveis de ambiente no formato `Secao__Chave`)
 | `Database__ApplyMigrations` | `false` (`true` no Compose) | Aplica migrations e ativa WAL no startup |
 | `DataProtection__KeysPath` | `/data/keys` na imagem | Persistência das chaves que protegem os tokens |
 | `Seed__AdminEmail`, `Seed__AdminPassword` | — | Admin inicial (obrigatórios no primeiro startup) |
+| `RabbitMq__Host`, `RabbitMq__Port`, `RabbitMq__VirtualHost` | `localhost`, `5672`, `/` (`rabbitmq` no Compose) | Broker |
+| `RabbitMq__UserName`, `RabbitMq__Password` | — (vêm do `.env` no Compose) | Credenciais do broker |
+| `RabbitMq__ReportQueue` | `expensehub.reports.requested` | Fila quorum durável das solicitações |
+| `RabbitMq__PublishTimeout` | `00:00:05` | Espera máxima pela confirmação antes do 503 |
+| `ReportProcessing__MaxAttempts` | `5` | Inícios de processamento antes de `Failed` (`report.attempts_exhausted`) |
+| `ReportProcessing__RetryDelay` | `00:00:05` | Pausa antes de devolver à fila uma mensagem com falha transitória |
+| `ReportProcessing__Prefetch` | `1` | Entregas sem `ack` mantidas pelo worker |
 | `ASPNETCORE_ENVIRONMENT` | `Development` no Compose | Habilita `/docs` e `/openapi/v1.json` |
 
 ## API — identidade e administração
@@ -172,16 +180,127 @@ concorrência, 500 falha inesperada sem detalhes internos.
 
 Chamadas manuais: [`sources/ExpenseHub.Api/ExpenseHub.Api.http`](sources/ExpenseHub.Api/ExpenseHub.Api.http) (REST
 Client do VS Code). Os valores vêm do ambiente do editor (`EXPENSEHUB_BASE_URL`, `Seed__AdminEmail`,
-`Seed__AdminPassword`, `EXPENSEHUB_ACCOUNT_*`, `EXPENSEHUB_*_EMAIL`, `EXPENSEHUB_EXPENSE_DATE`), sem tokens ou
-senhas no arquivo. Ordem: cadastrar cada perfil, conceder a role como Admin, fazer os logins nomeados e seguir o
-fluxo criar → editar → enviar → aprovar → pagar → histórico.
+`Seed__AdminPassword`, `EXPENSEHUB_ACCOUNT_*`, `EXPENSEHUB_*_EMAIL`, `EXPENSEHUB_EXPENSE_DATE` e, para relatórios,
+`EXPENSEHUB_REPORT_FROM`/`EXPENSEHUB_REPORT_TO`), sem tokens ou senhas no arquivo. Ordem: cadastrar cada perfil,
+conceder a role como Admin, fazer os logins nomeados e seguir o fluxo criar → editar → enviar → aprovar → pagar →
+histórico → relatório → detalhe → Excel.
 
 ## Relatórios em segundo plano (CP3)
 
-Resumo de reembolsos por período, solicitado sem esperar o cálculo: a API registra e publica, o worker consome,
-calcula e persiste, e o usuário acompanha e baixa o resultado em Excel. As rotas (`POST /api/reports`,
-`GET /api/reports`, `GET /api/reports/{id}`, `GET /api/reports/{id}/excel`) e o contrato da mensagem entram aqui
-junto com os PRs de CP3-I01 e CP3-I03. O estado de cada frente fica em [Andamento do CP3](#andamento-do-cp3).
+Resumo de reembolsos por período, solicitado sem esperar o cálculo: a API **registra e publica**, o worker
+**consome, calcula e persiste**, e o usuário **acompanha e baixa** o resultado em Excel. Sem interface nova: use o
+Scalar (`/docs`) ou o arquivo `.http`.
+
+| Rota | Comportamento |
+|---|---|
+| `POST /api/reports` | Valida e grava a solicitação `Pending`, publica `{"reportId"}` e responde **202** com `Location: /api/reports/{id}` somente depois da confirmação do broker. |
+| `GET /api/reports` | Lista só as solicitações criadas pelo usuário autenticado, mais recentes primeiro. |
+| `GET /api/reports/{id}` | Andamento e resultado persistido de uma solicitação própria (200), sem recalcular. |
+| `GET /api/reports/{id}/excel` | `.xlsx` real do resultado persistido de uma solicitação própria `Completed`. |
+
+```json
+{ "fromDate": "2026-09-01", "toDate": "2026-09-30", "scope": "Mine" }
+```
+
+- Datas `yyyy-MM-dd`, obrigatórias, com `fromDate <= toDate`. O filtro usa `ExpenseDate` com os dois limites
+  **inclusivos**, nunca a data de criação.
+- `scope`: `Mine` ou `Global` (sem diferenciar maiúsculas; valores numéricos como `"1"` são rejeitados). O
+  solicitante vem **só do token**: não existe `ownerId` no contrato.
+- Cada POST válido cria uma solicitação nova; não há deduplicação de cliente.
+
+Envelope (todas as rotas; instantes em UTC):
+
+```json
+{
+  "id": "…", "scope": "Mine", "fromDate": "2026-09-01", "toDate": "2026-09-30", "status": "Pending",
+  "createdAt": "…Z", "startedAt": null, "completedAt": null, "result": null, "error": null
+}
+```
+
+| Estado | Campos |
+|---|---|
+| `Pending` | `createdAt` preenchido; sem resultado |
+| `Processing` | `startedAt` preenchido; sem resultado |
+| `Completed` | `completedAt` e `result` preenchidos; `error` nulo |
+| `Failed` | `completedAt` e `error` (`code` estável + `message` sanitizada) preenchidos; `result` nulo |
+
+`result` traz `generatedAt`, `totalCount`, `totalAmount` e `byStatus` com **os cinco estados sempre presentes**
+(`Draft`, `Submitted`, `Approved`, `Rejected`, `Paid`), inclusive zerados. Somas em `decimal`, exatas. O resultado
+é gravado como JSON na própria solicitação (`ReportRequests.ResultJson`); consultas e o Excel leem esse registro e
+nunca recalculam, então alterar um reembolso depois da conclusão não muda o relatório salvo.
+
+**Excel:** `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`,
+`Content-Disposition: attachment; filename=report-{id}.xlsx`. A planilha `Report` traz identificador, escopo,
+período, instante de geração e a tabela `Status | Count | Amount` com os cinco estados e o total geral, em células
+numéricas. Gerada com ClosedXML (MIT) a partir do resultado persistido, sem nova mensagem na fila.
+
+| Cenário | Resposta |
+|---|---|
+| Sem autenticação | 401 |
+| Datas ausentes, inválidas ou invertidas; escopo inválido | 400 (`report.invalid_period` / `report.invalid_scope`), nada é gravado nem publicado |
+| Detalhe ou Excel inexistente ou de outro usuário | 404 (`report.not_found`) |
+| Excel de solicitação própria `Pending`, `Processing` ou `Failed` | 409 (`report.not_completed`) |
+| Gravada e publicação confirmada | 202 + `Location` |
+| Banco indisponível antes de gravar | Erro explícito (500 sanitizado), sem 202 e sem identificador |
+| Gravada, mas publicação sem confirmação (broker fora, nack, timeout) | **503** `report.publish_unconfirmed` com o `reportId` persistido; a solicitação continua `Pending` |
+
+**Mensageria (publicação):** fila `expensehub.reports.requested`, **durável do tipo quorum**, declarada de forma
+idempotente pela API e pelo worker. Mensagens **persistentes** e `mandatory`, publicadas num canal com **publisher
+confirms**: o 202 só sai depois do ack do broker. A espera é limitada por `RabbitMq__PublishTimeout` (padrão 5 s),
+inclusive quando o broker está fora e a resolução de nome trava. Corpo mínimo `{"reportId":"…"}`, com
+`MessageId`/`CorrelationId` iguais ao id. A conexão é única por processo, criada no primeiro uso e com recuperação
+automática.
+
+**Janela sem Transactional Outbox:** gravar e publicar são operações distintas. Se o processo cair entre as duas, ou
+se a confirmação se perder, a solicitação fica `Pending` sem mensagem garantida. A API responde 503 com o id, o
+registro é preservado e um novo POST cria outra solicitação. Reiniciar o worker **não** recupera uma mensagem que
+nunca foi publicada. Republicação automática e entrega exatamente uma vez estão fora do escopo.
+
+Verificado no Compose: anônimo → 401; período invertido, data inválida e `scope: "1"` → 400; POST válido → 202 com
+`Location` e uma mensagem `Ready` na fila quorum; detalhe e Excel de outro usuário → 404; Excel `Pending` → 409;
+broker parado → 503 com `reportId` em ~5 s; broker de volta → 202 de novo, sem reiniciar a API.
+
+### Processamento no worker
+
+`ExpenseHub.Worker` consome a fila com **ack manual** e `prefetch` 1. Para cada mensagem:
+
+1. Corpo inválido (JSON quebrado, id vazio) → `ack` e log; não há estado para alterar.
+2. Carrega a solicitação **do banco** pelo `reportId`. Período, escopo e solicitante nunca vêm da mensagem; campos
+   extras como `ownerId` são ignorados. Inexistente → `ack` e log.
+3. `Completed` ou `Failed` → **duplicata**: `ack` sem nenhum novo efeito. A proteção é o próprio estado persistido,
+   então sobrevive a reinícios do worker.
+4. `Pending` ou `Processing` → grava `Processing` (`startedAt` só na primeira vez, `attempts + 1`). Uma solicitação
+   deixada em `Processing` por uma queda é **retomada** na reentrega.
+5. Lê os reembolsos elegíveis **naquele momento** (filtro em SQL) e grava `Completed` + `result` + `completedAt` num
+   único `SaveChanges`. Só então faz o `ack`.
+
+| Situação | Tratamento |
+|---|---|
+| Banco ocupado ou indisponível, timeout, I/O, conflito de revisão | **Transitória**: `nack` com requeue depois de `ReportProcessing__RetryDelay` (5 s); nada é marcado como `Failed` |
+| Erro de cálculo ou de dados | **Definitiva**: grava `Failed` com `report.calculation_failed` e mensagem sanitizada, depois `ack` (sem reencaminhamento infinito) |
+| Mais de `ReportProcessing__MaxAttempts` (5) inícios | `Failed` com `report.attempts_exhausted`, mesmo que o worker caia sempre no mesmo ponto |
+| Falha ao gravar o próprio `Failed` | A exceção sobe e a entrega **não** recebe `ack`; volta à fila |
+| Worker encerrando no meio do processamento | Sem `ack`: o broker reentrega depois que o canal fecha |
+| Duas entregas simultâneas | `Revision` é token de concorrência: a perdedora recebe conflito, volta à fila e vira duplicata |
+
+**Retomada de `Processing`:** basta uma nova entrega do mesmo `{"reportId"}`. Ela acontece sozinha depois de uma queda
+do worker (mensagem `Unacked` volta a `Ready`). Se a mensagem se perdeu (por exemplo, a fila quorum descartou após o
+`delivery-limit` padrão de 20 reentregas), republique o payload pelo painel do RabbitMQ
+(*Queues → expensehub.reports.requested → Publish message*). O processamento continua de onde parou e nunca duplica
+o resultado.
+
+Logs correlacionados por `reportId` (escopo `ReportId:<id>` e campo estruturado) para publicação, recebimento,
+início, conclusão, duplicata, reentrega e falha, sem tokens, senhas ou connection strings.
+
+Verificado no Compose:
+- **Fluxo normal:** 3 reembolsos de R$ 100, R$ 50 e R$ 25 → `Completed` com 3 / R$ 175 e `.xlsx` válido.
+- **Worker parado:** a solicitação fica `Pending`; ao religar o worker, o mesmo id chega a `Completed`.
+- **Duplicata:** depois de reiniciar o worker, a mensagem republicada pelo painel é registrada como duplicata;
+  `completedAt` e `generatedAt` ficam idênticos.
+- **Recriação:** depois de recriar API e worker, o mesmo token e o resultado anterior continuam válidos.
+
+> A matriz de perfil × escopo (`Mine` para Employee, `Global` para Auditor, demais → 403) chega com CP3-I02. Ver
+> [andamento](#andamento-do-cp3).
 
 ## Testes, cobertura e qualidade
 
@@ -192,7 +311,8 @@ junto com os PRs de CP3-I01 e CP3-I03. O estado de cada frente fica em [Andament
 | HTTP (`scripts/Invoke-ExpenseHubVerification.ps1`) | 104 cenários contra a API real em SQLite descartável; relatórios sanitizados em `artifacts/demo/`. | `make demo` |
 
 **Gate de cobertura unitária:** ≥ 95 % de linhas **e** de branches no total da solução (`make coverage`; o build
-falha abaixo disso). Estado atual: **100 % de linhas e 95,6 % de branches** (Core: 100 % / 100 %). As exclusões
+falha abaixo disso). Estado atual: **100 % de linhas e 97,2 % de branches** (Core: 100 % / 100 %), com 212 testes
+unitários e 14 de integração. As exclusões
 ficam declaradas só em `ExpenseHub.UnitTests.csproj`: migrations, código gerado, `Program.cs` (composition root,
 exercitado pelos smoke tests nos containers) e adaptadores de I/O real (`ExpenseHub.Core.Persistence`, RabbitMQ),
 cobertos pela suíte de integração. Métodos `async` **não** são excluídos.
@@ -219,6 +339,18 @@ Cada requisito aponta para os testes que o comprovam. Linhas novas entram no mes
 | Contrato HTTP | Status por rota, `Location`, ProblemDetails com `code`/`traceId`, 500 sanitizado | `Api/ExpensesControllerTests`, `Api/ApiExceptionHandlerTests` | — | Todas as 13 rotas |
 | Auditoria | Log por requisição com método, rota, recurso, ator, `traceId` e status real | `Api/RequestAuditMiddlewareTests` | — | — |
 | OpenAPI | Bearer, tags, status documentados, exemplos, enum de estados, `decimal` | `Api/OpenApiDocumentTests` | — | Contrato OpenAPI |
+| Relatório — cálculo | Exemplo do professor (Mine 3 / R$ 175,00; Global 4 / R$ 375,00), limites inclusivos, Mine sem outros donos, cinco estados zerados, somas `decimal` exatas | `Reports/ReportCalculatorTests` | `RelationalReportTests` (mesmo filtro traduzido para SQL) | — |
+| Relatório — solicitação | Grava `Pending` com solicitante do token e publica uma vez; escopos válidos e inválidos (inclusive `"1"`); período invertido ou ausente → 400 sem gravar nem publicar; dia único válido; cada POST cria outro id | `Reports/ReportServiceTests` | `RelationalReportTests` (constraints de período e FK) | — |
+| Relatório — publicação | Sem confirmação → 503 com `reportId` persistido e `Pending`; banco fora antes de gravar → erro sem publicar; extensões no ProblemDetails | `Reports/ReportServiceTests`, `Api/ApiExceptionHandlerTests` | — | — |
+| Relatório — leitura | Lista só os próprios, mais recentes primeiro; detalhe alheio → 404; resultado persistido sem recálculo; erro sanitizado em `Failed` | `Reports/ReportServiceTests`, `Reports/ReportContractTests` | `RelationalReportTests` (consultas por dono em SQL, UTC) | — |
+| Relatório — Excel | `.xlsx` real (ZIP), metadados, cinco estados e total em células numéricas iguais ao resultado salvo; vazio com zeros; 409 fora de `Completed`; 404 alheio; nome `report-{id}.xlsx` | `Reports/ReportWorkbookTests`, `Reports/ReportServiceTests`, `Api/ReportsControllerTests` | — | — |
+| Mensagem | Corpo só com `reportId`; JSON inválido, vazio ou id zero rejeitados; campos extras (ex.: `ownerId`) ignorados | `Reports/ReportRequestedMessageTests` | — | — |
+| Contrato HTTP de relatórios | 202 + `Location`, 503/409 documentados no OpenAPI, exemplos de corpo | `Api/ReportsControllerTests`, `Api/OpenApiDocumentTests` | — | — |
+| Worker — conclusão | `Pending` → `Processing` → `Completed` com resultado, `startedAt`, `completedAt`, `attempts`; dados lidos no processamento; escopo e solicitante persistidos | `Reports/ReportProcessorTests` | `RelationalReportProcessingTests` (estado e resultado no mesmo commit) | — |
+| Worker — idempotência | `Completed`/`Failed` reentregues sem novo efeito, inclusive com um processor novo (worker reiniciado); alteração posterior de reembolso não muda o salvo | `Reports/ReportProcessorTests` | `RelationalReportProcessingTests` | — |
+| Worker — retomada e limite | `Processing` retomado preservando `startedAt`; tentativas esgotadas → `Failed` sem calcular | `Reports/ReportProcessorTests` | — | — |
+| Worker — falhas | Transitórias (DB, timeout, I/O, concorrência) → retry sem `Failed`; definitiva → `Failed` sanitizado; falha ao gravar `Failed` propaga (sem `ack`); cancelamento não vira falha | `Reports/ReportProcessorTests` | `RelationalReportProcessingTests` (conflito de revisão real) | — |
+| Worker — logs | Toda entrada correlacionada pelo `reportId`; resultado igual com log desligado | `Reports/ReportProcessorTests` | — | — |
 
 Execução em matriz no CI: cada suíte roda em **Ubuntu, Windows e macOS** (ver abaixo).
 
@@ -227,7 +359,7 @@ Execução em matriz no CI: cada suíte roda em **Ubuntu, Windows e macOS** (ver
 | Workflow | Jobs |
 |---|---|
 | `code-quality` (`build.yml`, do professor, inalterado) | Build, Gitleaks e score de qualidade |
-| `ci` (`ci.yml`) | `make verify` no Ubuntu (gate de cobertura + resumo no job); matriz `{Unit, Integration} × {Ubuntu, Windows, macOS}`; build das imagens |
+| `ci` (`ci.yml`) | `make verify` no Ubuntu (gate de cobertura + resumo no job); matriz `{Unit, Integration} × {Ubuntu, Windows, macOS}`; build das imagens da API e do worker |
 | `expensehub-demo` (`demo.yml`) | Build, testes e os 104 cenários HTTP, com relatório como artefato |
 
 ## Extras
@@ -244,18 +376,25 @@ Além do exigido, sempre com um extra por entrega:
 | Provas relacionais em SQLite real (constraints, concorrência, rollback) | `ExpenseHub.IntegrationTests` |
 | Tokens preservados entre recriações (Data Protection em volume) e SQLite em WAL | `Program.cs`, `DatabaseInitializer` |
 | Segredos locais gerados automaticamente | `make env` |
+| Fila quorum, check constraints de estado, escopo e período no banco, e publicação com tempo máximo mesmo com o broker fora | `RabbitMqReportPublisher`, migration `AddReportRequests` |
+| Exemplo do professor reproduzido em teste unitário **e** em SQL real | `ReportCalculatorTests`, `RelationalReportTests` |
+| Limite de tentativas persistido (`attempts`), classificação transitória × definitiva e corrida resolvida por token de revisão | `ReportProcessor`, `RelationalReportProcessingTests` |
+| Logs do worker com `[LoggerMessage]` (source generator) e escopo `ReportId` | `ReportConsumer`, `ReportProcessor` |
 
 ## Andamento do CP3
 
 | Issue | Frente | Responsável | Estado |
 |---|---|---|---|
-| Fundação | Core compartilhado, containers, Makefile, cobertura, CI em matriz | João | Concluída neste PR |
-| [CP3-I01](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/11) | Contrato, cálculo, persistência e Excel | João | Planejada |
-| [CP3-I03](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/13) | RabbitMQ, worker e idempotência | João | Planejada |
-| [CP3-I02](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/12) | Autorização e isolamento | Matheus | Planejada |
-| [CP3-I04](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/14) | Testes próprios significativos | Matheus | Planejada |
-| [CP3-I05](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/15) | Imagens publicadas e Compose reproduzível | André | Planejada |
-| [CP3-I06](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/16) | Experimentos E01–E05 e diagnóstico | André | Planejada |
+| Fundação | Core compartilhado, containers, Makefile, cobertura, CI em matriz | João | Concluída (PR #2) |
+| [CP3-I01](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/11) | Contrato, cálculo, persistência, Excel e publicação confirmada | João | Concluída (PR #3) |
+| [CP3-I03](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/13) | Worker, ack após persistir, idempotência e falhas | João | Concluída neste PR |
+| [CP3-I02](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/12) | Autorização e isolamento | Matheus | Planejada — [plano](docs/plans/matheus-cp3-i02-i04.md#2-cp3-i02--autorização-e-isolamento) |
+| [CP3-I04](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/14) | Testes próprios significativos + mutação | Matheus | Planejada — [plano](docs/plans/matheus-cp3-i02-i04.md#3-cp3-i04--testes-próprios-significativos) |
+| [CP3-I05](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/15) | Imagens publicadas por commit, Compose de release, Trivy + SBOM | André | Planejada — [plano](docs/plans/andre-cp3-i05-i06.md#2-cp3-i05--publicação-e-execução-reproduzível) |
+| [CP3-I06](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/16) | Dossiê E01–E05, diagnóstico e `make experiments` | André | Planejada — [plano](docs/plans/andre-cp3-i05-i06.md#3-cp3-i06--experimentos-e-diagnóstico) |
+
+Ordem de dependência: CP3-I02 antes do E04 (CP3-I06); CP3-I05 antes dos experimentos com imagens publicadas;
+CP3-I04 depois do CP3-I02.
 | [CP3-I07](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/17) | Qualidade das alterações | Todos | Contínua (`make verify`, `make quality`) |
 
 ## Solução de problemas
@@ -265,6 +404,7 @@ Além do exigido, sempre com um extra por entrega:
 | `all predefined address pools have been fully subnetted` no `make up` | O Docker do host esgotou as faixas de rede. Remova redes sem uso (`docker network prune`) ou crie um `compose.override.yaml` local (já ignorado pelo Git) fixando uma subnet livre em `networks.default.ipam.config`. |
 | `port is already allocated` | Outra aplicação usa a porta. Ajuste `API_PORT` ou `RABBITMQ_MANAGEMENT_PORT` no `.env`. |
 | `set SEED_ADMIN_EMAIL in .env` ao subir | O `.env` não existe ou está incompleto: rode `make env`. |
+| `make quality` local com FIAP2102 em `.env` | O script também varre arquivos locais não versionados; o `.env` real (ignorado pelo Git) tem senhas. No CI ele não existe e o score é 100. |
 | Token deixou de valer | Mudança de roles exige novo login. Se os volumes foram removidos, as chaves e o banco foram recriados. |
 
 ## Entregas e referências
@@ -272,6 +412,17 @@ Além do exigido, sempre com um extra por entrega:
 - **CP2:** implementação integrada pelo PR #1 deste repositório e marcada pela tag `cp2-final`, que é o commit base
   evoluído pelo CP3. Issues cobertas: Racass/checkpoint-csharpracass-expensehub#1 a #10.
 - **CP3:** o commit final é registrado aqui quando a última frente for integrada.
+
+Checklist de entrega do CP3 (envio no Teams):
+
+- [ ] Repositório, integrantes e RMs; commit do CP2 (`cp2-final`) e SHA final do CP3
+- [ ] Referências completas das duas imagens (`ghcr.io/…:<sha>`) e acesso público para `docker pull`
+- [ ] `compose.release.yaml` + `.env.example` + passos de inicialização (este README)
+- [ ] Arquivo `.http` sem tokens cobrindo solicitações, consultas e download do Excel
+- [ ] Comando e resultado dos testes próprios (`make test-unit`, `make coverage`), separados dos experimentos
+- [ ] Dossiê E01–E05 e diagnóstico (`docs/evidence/DOSSIE-CP3.md`)
+- [ ] Código compactado, se pedido: só fontes e configuração de exemplo (sem `bin/`, `obj/`, `.env`, bancos)
+- [ ] LinkedIn: cada integrante envia o próprio link, com texto próprio
 - Documentos do professor herdados do template: [enunciado](docs/ENUNCIADO.md), [requisitos](docs/REQUISITOS.md),
   [matriz de autorização](docs/MATRIZ-AUTORIZACAO.md), [rubrica](docs/RUBRICA.md),
   [processo GitHub](docs/PROCESSO-GITHUB.md), [uso de IA](docs/USO-DE-IA.md),

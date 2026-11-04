@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using ExpenseHub.Core.Infrastructure;
@@ -35,6 +36,11 @@ internal sealed class ApiExceptionHandler : IExceptionHandler
             Type = "urn:expensehub:problem:" + code,
             Instance = httpContext.Request.Path,
         };
+        foreach (KeyValuePair<string, object?> extension in expected?.Extensions ?? new Dictionary<string, object?>())
+        {
+            problem.Extensions[extension.Key] = extension.Value;
+        }
+
         problem.Extensions["code"] = code;
         problem.Extensions["traceId"] = httpContext.TraceIdentifier;
         httpContext.Response.StatusCode = status;

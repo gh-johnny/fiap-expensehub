@@ -16,8 +16,8 @@ O `CLAUDE.md` importa este arquivo; **este é o documento de regras de referênc
 | Integrante | RM | Frente no CP3 |
 |---|---|---|
 | João Marcelo Furtado Romero | RM555199 | Fundação, CP3-I01, CP3-I03 |
-| Matheus Rivera Montovaneli | RM555499 | CP3-I02, CP3-I04 |
-| André Nakamatsu Rocha | RM555004 | CP3-I05, CP3-I06 |
+| Matheus Rivera Montovaneli | RM555499 | CP3-I02, CP3-I04 — [plano](docs/plans/matheus-cp3-i02-i04.md) |
+| André Nakamatsu Rocha | RM555004 | CP3-I05, CP3-I06 — [plano](docs/plans/andre-cp3-i05-i06.md) |
 
 CP3-I07 (qualidade) é transversal: cada pessoa responde pela qualidade do próprio diff.
 
@@ -51,8 +51,9 @@ CP3-I07 (qualidade) é transversal: cada pessoa responde pela qualidade do próp
    - Logs estruturados e correlacionados (`traceId`, `reportId`), sem tokens, senhas ou connection strings.
 8. **README único e vivo.** O `README.md` é a única documentação do projeto. Todo PR que muda
    comportamento, contrato, comando ou configuração atualiza o README no mesmo PR. Não criar documentos
-   paralelos; as exceções são `docs/plans/` (planos de trabalho por integrante) e os documentos do professor
-   herdados do template em `docs/` (especificação, não editar).
+   paralelos; as exceções são `docs/plans/` (planos de trabalho por integrante), `docs/evidence/` (dossiê de
+   experimentos exigido na entrega) e os documentos do professor herdados do template em `docs/` (especificação,
+   não editar).
 
 ## Fluxo de trabalho
 
@@ -71,6 +72,7 @@ sources/
 ├── ExpenseHub.slnx
 ├── ExpenseHub.Core/              # domínio, serviços, EF Core (DbContext, migrations, stores)
 ├── ExpenseHub.Api/               # host HTTP: controllers, ProblemDetails, OpenAPI/Scalar
+├── ExpenseHub.Worker/            # host do worker: consumo RabbitMQ com ack manual e processamento de relatórios
 ├── ExpenseHub.UnitTests/         # MSTest, sem I/O real — gate de cobertura
 └── ExpenseHub.IntegrationTests/  # SQLite real e provas relacionais
 ```

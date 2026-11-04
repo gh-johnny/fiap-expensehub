@@ -24,7 +24,8 @@ internal static class ApiDocumentation
             document.Info.Version = "v1";
             document.Info.Description = "Register an account, login with useCookies=false, then paste the returned accessToken into Bearer authentication. "
                 + "An Admin grants roles; login again after any role change. Employee reads own expenses, Approver reads Submitted, Finance reads Approved/Paid, Auditor reads all. "
-                + "Roles combine; owners cannot approve, reject or pay their own expenses. Admin alone grants account administration access.";
+                + "Roles combine; owners cannot approve, reject or pay their own expenses. Admin alone grants account administration access. "
+                + "Reports are calculated in the background: POST /api/reports answers 202 with a Location, poll the detail until Completed, then download /excel.";
             document.Components ??= new OpenApiComponents();
             document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
             document.Components.SecuritySchemes["Bearer"] = new OpenApiSecurityScheme
@@ -39,6 +40,7 @@ internal static class ApiDocumentation
                 new() { Name = "Admin" },
                 new() { Name = "Expenses" },
                 new() { Name = "History" },
+                new() { Name = "Reports" },
                 new() { Name = "System" },
             };
             return Task.CompletedTask;
@@ -52,6 +54,7 @@ internal static class ApiDocumentation
                 .Replace("{", string.Empty, StringComparison.Ordinal).Replace("}", string.Empty, StringComparison.Ordinal);
             string tag = route.StartsWith("api/admin/", StringComparison.Ordinal) ? "Admin"
                 : route.StartsWith("api/expenses", StringComparison.Ordinal) ? (route.EndsWith("/history", StringComparison.Ordinal) ? "History" : "Expenses")
+                : route.StartsWith("api/reports", StringComparison.Ordinal) ? "Reports"
                 : route == "health" ? "System" : "Identity";
             operation.Tags = new HashSet<OpenApiTagReference> { new(tag, context.Document) };
             IList<object> metadata = context.Description.ActionDescriptor.EndpointMetadata;
@@ -72,10 +75,15 @@ internal static class ApiDocumentation
                 if (route.Contains("{id}", StringComparison.Ordinal))
                 {
                     errors.Add(404);
-                    if (method != "GET")
+                    if (method != "GET" || route.EndsWith("/excel", StringComparison.Ordinal))
                     {
                         errors.Add(409);
                     }
+                }
+
+                if (method == "POST" && route == "api/reports")
+                {
+                    errors.Add(503);
                 }
 
                 OpenApiSchema schema = await context.GetOrCreateSchemaAsync(typeof(ProblemDetails), cancellationToken: cancellationToken);
@@ -114,6 +122,22 @@ internal static class ApiDocumentation
                 else if (route.EndsWith("/reject", StringComparison.Ordinal))
                 {
                     body.Example = JsonSerializer.SerializeToNode(new { reason = "Receipt is missing" });
+                }
+                else if (route == "api/reports")
+                {
+                    body.Examples = new Dictionary<string, IOpenApiExample>
+                    {
+                        ["mine"] = new OpenApiExample
+                        {
+                            Summary = "Own reimbursements in an inclusive period (Employee)",
+                            Value = JsonSerializer.SerializeToNode(new { fromDate = "2026-09-01", toDate = "2026-09-30", scope = "Mine" }),
+                        },
+                        ["invalid"] = new OpenApiExample
+                        {
+                            Summary = "fromDate after toDate returns 400 and queues nothing",
+                            Value = JsonSerializer.SerializeToNode(new { fromDate = "2026-09-30", toDate = "2026-09-01", scope = "Global" }),
+                        },
+                    };
                 }
             }
         });

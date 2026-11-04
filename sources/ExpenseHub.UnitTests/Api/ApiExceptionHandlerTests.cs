@@ -31,6 +31,19 @@ public sealed class ApiExceptionHandlerTests
         Assert.IsEmpty(logger.Entries);
     }
 
+    /// <summary>Extensions such as the persisted report id are published next to code and traceId.</summary>
+    [TestMethod]
+    public async Task ProblemExtensionsArePublished()
+    {
+        var id = Guid.NewGuid();
+        var problem = new ApiProblemException(503, "report.publish_unconfirmed", "Not queued.",
+            new System.Collections.Generic.Dictionary<string, object?> { ["reportId"] = id });
+        (HttpContext context, JsonElement body) = await HandleAsync(new ListLogger<ApiExceptionHandler>(), problem);
+        Assert.AreEqual(503, context.Response.StatusCode);
+        Assert.AreEqual(id, body.GetProperty("reportId").GetGuid());
+        Assert.AreEqual("report.publish_unconfirmed", body.GetProperty("code").GetString());
+    }
+
     /// <summary>An unexpected failure answers a sanitized 500 and is logged with the trace identifier.</summary>
     [TestMethod]
     public async Task UnexpectedFailureIsSanitized()
