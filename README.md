@@ -10,8 +10,8 @@ FIAP — C# Software Development · Professor Rafael Cassiolato · especificaç�
 | Integrante | RM | Frente no CP3 |
 |---|---|---|
 | João Marcelo Furtado Romero | RM555199 | Fundação, CP3-I01, CP3-I03 |
-| Matheus Rivera Montovaneli | RM555499 | CP3-I02, CP3-I04 |
-| André Nakamatsu Rocha | RM555004 | CP3-I05, CP3-I06 |
+| Matheus Rivera Montovaneli | RM555499 | CP3-I02, CP3-I04 — [plano](docs/plans/matheus-cp3-i02-i04.md) |
+| André Nakamatsu Rocha | RM555004 | CP3-I05, CP3-I06 — [plano](docs/plans/andre-cp3-i05-i06.md) |
 
 > **Documento vivo.** Este README é a única documentação do projeto. Todo PR que muda comportamento, contrato,
 > comando ou configuração atualiza este arquivo no mesmo PR. Regras de trabalho: [`AGENTS.md`](AGENTS.md).
@@ -388,10 +388,13 @@ Além do exigido, sempre com um extra por entrega:
 | Fundação | Core compartilhado, containers, Makefile, cobertura, CI em matriz | João | Concluída (PR #2) |
 | [CP3-I01](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/11) | Contrato, cálculo, persistência, Excel e publicação confirmada | João | Concluída (PR #3) |
 | [CP3-I03](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/13) | Worker, ack após persistir, idempotência e falhas | João | Concluída neste PR |
-| [CP3-I02](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/12) | Autorização e isolamento | Matheus | Planejada |
-| [CP3-I04](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/14) | Testes próprios significativos | Matheus | Planejada |
-| [CP3-I05](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/15) | Imagens publicadas e Compose reproduzível | André | Planejada |
-| [CP3-I06](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/16) | Experimentos E01–E05 e diagnóstico | André | Planejada |
+| [CP3-I02](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/12) | Autorização e isolamento | Matheus | Planejada — [plano](docs/plans/matheus-cp3-i02-i04.md#2-cp3-i02--autorização-e-isolamento) |
+| [CP3-I04](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/14) | Testes próprios significativos + mutação | Matheus | Planejada — [plano](docs/plans/matheus-cp3-i02-i04.md#3-cp3-i04--testes-próprios-significativos) |
+| [CP3-I05](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/15) | Imagens publicadas por commit, Compose de release, Trivy + SBOM | André | Planejada — [plano](docs/plans/andre-cp3-i05-i06.md#2-cp3-i05--publicação-e-execução-reproduzível) |
+| [CP3-I06](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/16) | Dossiê E01–E05, diagnóstico e `make experiments` | André | Planejada — [plano](docs/plans/andre-cp3-i05-i06.md#3-cp3-i06--experimentos-e-diagnóstico) |
+
+Ordem de dependência: CP3-I02 antes do E04 (CP3-I06); CP3-I05 antes dos experimentos com imagens publicadas;
+CP3-I04 depois do CP3-I02.
 | [CP3-I07](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/17) | Qualidade das alterações | Todos | Contínua (`make verify`, `make quality`) |
 
 ## Solução de problemas
@@ -409,6 +412,17 @@ Além do exigido, sempre com um extra por entrega:
 - **CP2:** implementação integrada pelo PR #1 deste repositório e marcada pela tag `cp2-final`, que é o commit base
   evoluído pelo CP3. Issues cobertas: Racass/checkpoint-csharpracass-expensehub#1 a #10.
 - **CP3:** o commit final é registrado aqui quando a última frente for integrada.
+
+Checklist de entrega do CP3 (envio no Teams):
+
+- [ ] Repositório, integrantes e RMs; commit do CP2 (`cp2-final`) e SHA final do CP3
+- [ ] Referências completas das duas imagens (`ghcr.io/…:<sha>`) e acesso público para `docker pull`
+- [ ] `compose.release.yaml` + `.env.example` + passos de inicialização (este README)
+- [ ] Arquivo `.http` sem tokens cobrindo solicitações, consultas e download do Excel
+- [ ] Comando e resultado dos testes próprios (`make test-unit`, `make coverage`), separados dos experimentos
+- [ ] Dossiê E01–E05 e diagnóstico (`docs/evidence/DOSSIE-CP3.md`)
+- [ ] Código compactado, se pedido: só fontes e configuração de exemplo (sem `bin/`, `obj/`, `.env`, bancos)
+- [ ] LinkedIn: cada integrante envia o próprio link, com texto próprio
 - Documentos do professor herdados do template: [enunciado](docs/ENUNCIADO.md), [requisitos](docs/REQUISITOS.md),
   [matriz de autorização](docs/MATRIZ-AUTORIZACAO.md), [rubrica](docs/RUBRICA.md),
   [processo GitHub](docs/PROCESSO-GITHUB.md), [uso de IA](docs/USO-DE-IA.md),
