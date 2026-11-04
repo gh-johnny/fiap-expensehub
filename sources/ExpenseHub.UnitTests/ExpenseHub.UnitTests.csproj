@@ -1,11 +1,36 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
 
+  <!--
+    Unit coverage gate (AGENTS.md, condition 5): 95 % of lines AND branches, measured over the
+    whole solution. Only applies when coverage is requested (`make coverage`). This is the single
+    place where exclusions live, and they are limited to:
+      - EF Core migrations and other generated code;
+      - composition roots (Program.cs), exercised by the container smoke tests;
+      - adapters for real I/O (EF Core persistence, RabbitMQ), covered by ExpenseHub.IntegrationTests.
+  -->
+  <PropertyGroup Label="Coverage">
+    <CoverletOutputFormat>cobertura</CoverletOutputFormat>
+    <CoverletOutput>$(MSBuildThisFileDirectory)../../artifacts/coverage/unit/</CoverletOutput>
+    <Include>[ExpenseHub.Core]*,[ExpenseHub.Api]*,[ExpenseHub.Worker]*</Include>
+    <Exclude>[ExpenseHub.Core]ExpenseHub.Core.Persistence.*,[ExpenseHub.Core]ExpenseHub.Core.Migrations.*,[ExpenseHub.Worker]ExpenseHub.Worker.Messaging.RabbitMq*</Exclude>
+    <ExcludeByFile>**/Migrations/*.cs,**/Program.cs,**/obj/**/*.cs</ExcludeByFile>
+    <ExcludeByAttribute>GeneratedCodeAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
+    <Threshold>95</Threshold>
+    <ThresholdType>line,branch</ThresholdType>
+    <ThresholdStat>total</ThresholdStat>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="MSTest" Version="4.0.2" />
+    <PackageReference Include="coverlet.msbuild" Version="6.0.4">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.12" />
   </ItemGroup>
 
   <ItemGroup>

@@ -2,9 +2,9 @@ using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
-using ExpenseHub.Api.Contracts.Requests;
-using ExpenseHub.Api.Infrastructure;
-using ExpenseHub.Api.Services;
+using ExpenseHub.Core.Contracts.Requests;
+using ExpenseHub.Core.Infrastructure;
+using ExpenseHub.Core.Services;
 using ExpenseHub.UnitTests.TestDoubles;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 

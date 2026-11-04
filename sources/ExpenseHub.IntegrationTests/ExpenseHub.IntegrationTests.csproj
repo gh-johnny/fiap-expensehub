@@ -2,8 +2,20 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
+  <!-- Integration coverage is informational: it documents what the I/O adapters exercise. -->
+  <PropertyGroup Label="Coverage">
+    <CoverletOutputFormat>cobertura</CoverletOutputFormat>
+    <CoverletOutput>$(MSBuildThisFileDirectory)../../artifacts/coverage/integration/</CoverletOutput>
+    <Include>[ExpenseHub.Core]*,[ExpenseHub.Api]*,[ExpenseHub.Worker]*</Include>
+    <ExcludeByFile>**/Migrations/*.cs,**/obj/**/*.cs</ExcludeByFile>
+    <ExcludeByAttribute>GeneratedCodeAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
+  </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="MSTest" Version="4.0.2" />
+    <PackageReference Include="coverlet.msbuild" Version="6.0.4">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <ProjectReference Include="../ExpenseHub.Api/ExpenseHub.Api.csproj" />
   </ItemGroup>
 </Project>

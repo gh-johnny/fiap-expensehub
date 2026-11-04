@@ -1,119 +1,279 @@
----
-title: ExpenseHub — API de reembolsos
-status: internal
-created: 2026-10-03
-last-updated: 2026-10-03
-last-reviewed: 2026-10-03
----
+# ExpenseHub
 
-# ExpenseHub — API de reembolsos
+API corporativa de reembolsos em **ASP.NET Core 10**: Identity com bearer, autorização por perfil, proprietário e
+estado, histórico auditável e pagamento (CP2), evoluída com **relatórios em segundo plano via RabbitMQ, worker C# e
+exportação Excel** (CP3). Tudo roda em containers e todo comando passa pelo `Makefile`.
 
-Checkpoint de C# da FIAP: API ASP.NET Core 10 com persistência SQLite/EF Core, Identity bearer e autorização por perfil, proprietário e estado. As 13 rotas obrigatórias, histórico e pagamento estão implementados. Scalar, provas de persistência e demo HTTP com 104 cenários estão implementados. Integração final das PRs está pendente de aprovação.
+FIAP — C# Software Development · Professor Rafael Cassiolato · especificação comum nas issues de
+[`Racass/checkpoint-csharpracass-expensehub`](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues).
 
-| Integrante | RM |
+| Integrante | RM | Frente no CP3 |
+|---|---|---|
+| João Marcelo Furtado Romero | RM555199 | Fundação, CP3-I01, CP3-I03 |
+| Matheus Rivera Montovaneli | RM555499 | CP3-I02, CP3-I04 |
+| André Nakamatsu Rocha | RM555004 | CP3-I05, CP3-I06 |
+
+> **Documento vivo.** Este README é a única documentação do projeto. Todo PR que muda comportamento, contrato,
+> comando ou configuração atualiza este arquivo no mesmo PR. Regras de trabalho: [`AGENTS.md`](AGENTS.md).
+
+## Sumário
+
+1. [Início rápido](#início-rápido)
+2. [Arquitetura](#arquitetura)
+3. [Comandos](#comandos)
+4. [Configuração](#configuração)
+5. [API — identidade e administração](#api--identidade-e-administração)
+6. [API — reembolsos e histórico](#api--reembolsos-e-histórico)
+7. [Relatórios em segundo plano (CP3)](#relatórios-em-segundo-plano-cp3)
+8. [Testes, cobertura e qualidade](#testes-cobertura-e-qualidade)
+9. [Matriz de testes](#matriz-de-testes)
+10. [Integração contínua](#integração-contínua)
+11. [Extras](#extras)
+12. [Andamento do CP3](#andamento-do-cp3)
+13. [Solução de problemas](#solução-de-problemas)
+14. [Entregas e referências](#entregas-e-referências)
+
+## Início rápido
+
+Requisitos no host: **git**, **Docker com Compose v2** e **make**. Nenhum SDK .NET ou PowerShell é necessário.
+
+```shell
+git clone git@github.com:gh-johnny/fiap-expensehub.git
+cd fiap-expensehub
+make env      # cria .env com segredos locais aleatórios (ignorado pelo Git)
+make up       # constrói as imagens e sobe RabbitMQ + API, aguardando os health checks
+make ps       # estado e saúde dos serviços
+```
+
+| Endereço | Conteúdo |
 |---|---|
-| João Marcelo Furtado Romero | RM555199 |
-| Matheus Rivera Montovaneli | RM555499 |
-| André Nakamatsu Rocha | RM555004 |
+| <http://127.0.0.1:5080/docs> | Referência interativa (Scalar) |
+| <http://127.0.0.1:5080/openapi/v1.json> | Documento OpenAPI |
+| <http://127.0.0.1:5080/health> | Health check |
+| <http://127.0.0.1:15672> | Painel do RabbitMQ (usuário e senha em `.env`) |
 
-Prazo do enunciado: **13/10/2026**. Repositório público criado por template: [checkpoint-expensehub-fiap](https://github.com/gh-johnny/checkpoint-expensehub-fiap).
+O Admin inicial usa `SEED_ADMIN_EMAIL` e `SEED_ADMIN_PASSWORD` do `.env`. Para verificar tudo antes de um PR:
+`make verify`.
 
-## Preparação
+## Arquitetura
 
-Instalar um SDK .NET 10 completo, incluindo o runtime ASP.NET Core 10. A validação local usa SDK **10.0.401** e runtime **10.0.12**. Conferir `dotnet --info` e `dotnet --list-runtimes`; uma instalação parcial não basta. PowerShell 7 e Gitleaks 8.30.1 são necessários para reproduzir o corretor.
-
-```shell
-dotnet tool restore
-dotnet restore ./sources/ExpenseHub.slnx
-dotnet build ./sources/ExpenseHub.slnx --no-restore
+```mermaid
+flowchart LR
+    U[Usuário<br/>Scalar, .http] -->|HTTP + bearer| API[ExpenseHub.Api<br/>controllers, ProblemDetails]
+    API --> CORE[ExpenseHub.Core<br/>domínio, serviços, EF Core]
+    CORE --> DB[(SQLite em volume<br/>/data/expensehub.db)]
+    API -.->|publica reportId - CP3| MQ[(RabbitMQ<br/>fila durável)]
+    MQ -.->|consome - CP3| W[ExpenseHub.Worker<br/>calcula e persiste]
+    W -.-> CORE
 ```
 
-## Banco SQLite
+| Projeto | Responsabilidade |
+|---|---|
+| `ExpenseHub.Core` | Modelos, regras de autorização e de estado, contratos, `ExpenseHubDbContext`, migrations e stores EF Core. Compartilhado pela API e pelo worker. |
+| `ExpenseHub.Api` | Host HTTP: controllers finos, `ProblemDetails`, auditoria de requisições, OpenAPI/Scalar, seed e migrations no startup. |
+| `ExpenseHub.UnitTests` | MSTest sem banco, rede ou broker reais; contém o gate de cobertura. |
+| `ExpenseHub.IntegrationTests` | Provas com SQLite real: migrations, seed, constraints, concorrência e rollback. |
 
-Provider: `Microsoft.EntityFrameworkCore.Sqlite` **10.0.12**. Identity EF e Design usam a mesma versão. A ferramenta `dotnet-ef` é local ao repositório, no manifesto `.config/dotnet-tools.json`.
+Decisões principais:
 
-A conexão padrão é `Data Source=expensehub.db`. Para outro arquivo, configurar `ConnectionStrings__ExpenseHub` no ambiente. Não versionar credenciais, banco, WAL ou SHM. Não é necessário um servidor de banco para compilar.
+- **SQLite compartilhado em volume** (`/data`), com `journal_mode=WAL` aplicado pela API ao migrar, para que API e
+  worker leiam e escrevam o mesmo arquivo com segurança.
+- **Chaves de Data Protection persistidas** em `/data/keys`: os tokens bearer continuam válidos depois de recriar o
+  container (verificado com `docker compose up -d --force-recreate api`).
+- **Migrations no startup são opt-in** (`Database__ApplyMigrations=true` no Compose). Fora dos containers, use
+  `make migration` e `dotnet ef database update`.
+- Imagens em versões fixas (`sdk:10.0.402`, `aspnet:10.0.13`, `rabbitmq:4.1.4-management`), usuário não root e
+  health check próprio.
 
-```shell
-dotnet ef database update --project ./sources/ExpenseHub.Api --startup-project ./sources/ExpenseHub.Api
-dotnet run --project ./sources/ExpenseHub.Api --no-launch-profile
-```
+## Comandos
 
-Antes do primeiro início, definir `Seed__AdminEmail` e `Seed__AdminPassword` em configuração externa. A senha precisa atender às regras do Identity. O seed cria somente o Admin inicial, com identidade estável; reinícios preservam sua conta e senha existente. As ferramentas de migration não exigem essas credenciais.
+Todos os comandos rodam dentro do container `mcr.microsoft.com/dotnet/sdk:10.0.402`, com o usuário do host (arquivos
+gerados nunca pertencem ao root) e o cache NuGet em `~/.nuget/packages`. `make help` lista tudo.
 
-Usar a URL exibida pelo host para consultar `GET /health`. Para fixar uma URL local, configurar `ASPNETCORE_URLS` no ambiente. O banco é criado/atualizado pela migration; iniciar o processo sozinho não substitui esse comando.
+| Comando | O que faz |
+|---|---|
+| `make build` | Restaura e compila com `-warnaserror` |
+| `make format` / `make format-fix` | Verifica / aplica formatação e regras de estilo do `.editorconfig` |
+| `make quality` | Executa localmente o pipeline de qualidade do professor (`scripts/Invoke-CodeQuality.ps1`) |
+| `make test` | Suítes unitária e de integração |
+| `make test-unit` / `make test-integration` | Cada suíte isoladamente |
+| `make coverage` | Cobertura unitária com gate de **95 % de linhas e branches**; relatório em `artifacts/coverage/report/index.html` |
+| `make coverage-integration` | Cobertura informativa da suíte de integração |
+| `make demo` | Demonstração HTTP com 104 cenários do CP2 contra uma API e um SQLite descartáveis |
+| `make verify` | `build` + `format` + `coverage` + `test-integration` — obrigatório antes de todo PR |
+| `make env` | Cria `.env` a partir de `.env.example` com segredos aleatórios |
+| `make up` / `make down` | Sobe (com build) / derruba o ambiente; `down` preserva os volumes |
+| `make ps` / `make logs [SERVICE=api]` | Estado dos serviços / logs |
+| `make restart SERVICE=api` | Reinicia um serviço |
+| `make migration NAME=Nome` | Cria uma migration EF Core em `ExpenseHub.Core` |
+| `make shell` | Shell interativo no container do SDK |
+| `make clean` | Remove `bin/`, `obj/` e `artifacts/` (cache NuGet e volumes preservados) |
 
-A migration contém as tabelas de Identity, Expense, ExpenseCategory, ExpenseHistory e PaymentRecord. A categoria inicial `General` é um dado de domínio; não cria usuários. Revisão concorrente, pagamento único, histórico por revisão e FKs são definidos no mapeamento relacional.
+## Configuração
 
-## Autenticação
+`.env` (gerado por `make env`, nunca versionado):
 
-`POST /register` recebe email/password e cria conta sem roles. Um campo adicional de role não concede permissão. `POST /login?useCookies=false` recebe as credenciais e devolve accessToken/refreshToken nativos do Identity. Nas requisições protegidas, usar o accessToken no header Authorization como bearer; não tratá-lo como JWT.
+| Variável | Uso |
+|---|---|
+| `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` | Única conta criada pelo seed (Admin). A senha segue as regras do Identity. |
+| `RABBITMQ_USER`, `RABBITMQ_PASSWORD` | Credenciais do broker, usadas por RabbitMQ, API e worker. |
+| `API_PORT` | Porta do host para a API (padrão `5080`). |
+| `RABBITMQ_MANAGEMENT_PORT` | Porta do host para o painel do RabbitMQ (padrão `15672`). |
 
-As cinco roles são Admin, Employee, Approver, Finance e Auditor. O seed não cria usuários desses perfis. `GET /api/admin/users` lista contas e roles para Admin. `PUT /api/admin/users/{id}/roles` substitui o conjunto de roles em uma transação e retorna 204. Roles desconhecidas retornam 400; remover o próprio Admin retorna 403. Lista vazia é permitida para outro usuário. Após alterar roles, o usuário precisa fazer novo login. Não inserir token ou senha em exemplos versionados.
+Configuração da aplicação (variáveis de ambiente no formato `Secao__Chave`):
 
-## Despesas e histórico
+| Chave | Padrão | Uso |
+|---|---|---|
+| `ConnectionStrings__ExpenseHub` | `Data Source=/data/expensehub.db` na imagem | Banco SQLite |
+| `Database__ApplyMigrations` | `false` (`true` no Compose) | Aplica migrations e ativa WAL no startup |
+| `DataProtection__KeysPath` | `/data/keys` na imagem | Persistência das chaves que protegem os tokens |
+| `Seed__AdminEmail`, `Seed__AdminPassword` | — | Admin inicial (obrigatórios no primeiro startup) |
+| `ASPNETCORE_ENVIRONMENT` | `Development` no Compose | Habilita `/docs` e `/openapi/v1.json` |
 
-Criar e editar recebem somente `description`, `amount` e `expenseDate` (ISO `yyyy-MM-dd`). Descrição e justificativa são normalizadas com Trim e aceitam de 10 a 500 caracteres. Valor usa decimal, de 0,01 a 2.147.483.647; data não pode ser futura no calendário UTC do servidor. Owner, IDs, estado, atores e horários são definidos pela API.
+## API — identidade e administração
+
+- `POST /register` recebe `email` e `password` e cria a conta **sem roles**; um campo extra de role é ignorado.
+- `POST /login?useCookies=false` devolve `accessToken` e `refreshToken` nativos do Identity (opacos, não JWT). Use
+  `Authorization: Bearer <accessToken>` nas rotas protegidas.
+- Roles: `Admin`, `Employee`, `Approver`, `Finance`, `Auditor`. O seed cria só o Admin inicial, de forma idempotente.
+- `GET /api/admin/users` lista contas e roles (somente Admin).
+- `PUT /api/admin/users/{id}/roles` substitui o conjunto de roles numa transação e retorna 204. Role desconhecida
+  retorna 400; remover o próprio Admin retorna 403; conta inexistente retorna 404. Depois de mudar roles, o usuário
+  faz login de novo.
+
+## API — reembolsos e histórico
+
+Criar e editar recebem apenas `description` (10–500 caracteres, com trim), `amount` (`decimal`, de 0,01 a
+2.147.483.647) e `expenseDate` (`yyyy-MM-dd`, nunca futura no calendário UTC do servidor). Proprietário, IDs, estado,
+atores e instantes são definidos pelo servidor.
 
 | Operação | Perfil e condição |
 |---|---|
-| POST /api/expenses | Employee; cria Draft e retorna 201 com Location. |
-| PUT /api/expenses/{id} | Employee proprietário; somente Draft. |
-| POST /api/expenses/{id}/submit | Employee proprietário; Draft → Submitted. |
-| POST /api/expenses/{id}/approve | Approver não proprietário; Submitted → Approved. |
-| POST /api/expenses/{id}/reject | Approver não proprietário; Submitted → Rejected; body com reason. |
-| POST /api/expenses/{id}/pay | Finance não proprietário; Approved → Paid. |
-| GET /api/expenses, GET /api/expenses/{id}, GET /api/expenses/{id}/history | União dos escopos de leitura descritos abaixo. |
+| `POST /api/expenses` | Employee; cria `Draft`; 201 com `Location` |
+| `PUT /api/expenses/{id}` | Employee proprietário; somente `Draft` |
+| `POST /api/expenses/{id}/submit` | Employee proprietário; `Draft → Submitted` |
+| `POST /api/expenses/{id}/approve` | Approver não proprietário; `Submitted → Approved` |
+| `POST /api/expenses/{id}/reject` | Approver não proprietário; `Submitted → Rejected`; `reason` com 10–500 caracteres |
+| `POST /api/expenses/{id}/pay` | Finance não proprietário; `Approved → Paid` |
+| `GET /api/expenses`, `/{id}`, `/{id}/history` | União dos escopos de leitura abaixo |
 
-Employee lê todas as próprias despesas. Approver lê Submitted. Finance lê Approved/Paid. Auditor lê todas. Admin isolado administra contas, sem permissão implícita de despesas. Roles acumulam permissões, preservando a proibição de autoaprovação, autorreprovação e autopagamento. Auditor + Employee pode executar as ações concedidas por Employee.
+Leitura: Employee vê as próprias despesas; Approver vê `Submitted`; Finance vê `Approved` e `Paid`; Auditor vê todas;
+Admin sozinho não tem acesso a despesas. Roles se somam, mas ninguém aprova, reprova ou paga a própria despesa.
+O filtro de visibilidade é aplicado na consulta SQL, antes de materializar dados.
 
-Histórico usa revisão crescente e registra criação, edição efetiva e transições, com ator e UTC. Edição idêntica retorna 200 sem revisão/evento novos. Paid e Rejected são finais. Repetir transição retorna 409, mesmo quando o Approver perdeu a leitura do recurso após decidir. Alteração, evento e pagamento são persistidos no mesmo SaveChanges. Índices únicos protegem histórico por revisão e pagamento por despesa.
+O histórico registra criação, edições efetivas e transições, com revisão crescente, ator e instante UTC; edição
+idêntica retorna 200 sem novo evento. `Paid` e `Rejected` são finais; repetir uma transição retorna 409. Estado,
+evento e pagamento são gravados no mesmo `SaveChanges`, e índices únicos protegem histórico por revisão e pagamento
+por despesa.
 
-Erros usam ProblemDetails com code e traceId: 400 entrada inválida, 401 credencial ausente/inválida, 403 sem permissão, 404 ausente/invisível na leitura, 409 estado incompatível ou concorrência. Falhas inesperadas de provider continuam 500; somente conflitos conhecidos são traduzidos para 409. O traceId da resposta coincide com o identificador registrado no log de auditoria da requisição.
+Erros usam `ProblemDetails` com `code` estável e `traceId` (o mesmo registrado no log de auditoria): 400 entrada
+inválida, 401 sem credencial, 403 sem permissão, 404 ausente ou fora do escopo de leitura, 409 estado incompatível ou
+concorrência, 500 falha inesperada sem detalhes internos.
 
-## Referência interativa
+Chamadas manuais: [`sources/ExpenseHub.Api/ExpenseHub.Api.http`](sources/ExpenseHub.Api/ExpenseHub.Api.http) (REST
+Client do VS Code). Os valores vêm do ambiente do editor (`EXPENSEHUB_BASE_URL`, `Seed__AdminEmail`,
+`Seed__AdminPassword`, `EXPENSEHUB_ACCOUNT_*`, `EXPENSEHUB_*_EMAIL`, `EXPENSEHUB_EXPENSE_DATE`), sem tokens ou
+senhas no arquivo. Ordem: cadastrar cada perfil, conceder a role como Admin, fazer os logins nomeados e seguir o
+fluxo criar → editar → enviar → aprovar → pagar → histórico.
 
-Definir `ASPNETCORE_ENVIRONMENT=Development` antes de iniciar a API. Abrir `/docs` para o Scalar **2.17.13**; o documento fica em `/openapi/v1.json`. Esses caminhos são disponibilizados em Development. Agent Scalar está desabilitado e os arquivos da interface são servidos pelo pacote local.
+## Relatórios em segundo plano (CP3)
 
-Na seção Identity, executar `/register` ou `/login` com useCookies=false. Selecionar Bearer em Authentication e inserir somente o accessToken retornado. As operações protegidas usam essa configuração. Não há credenciais ou tokens pré-carregados no documento. Depois de uma troca de roles, fazer novo login e substituir o token.
+Resumo de reembolsos por período, solicitado sem esperar o cálculo: a API registra e publica, o worker consome,
+calcula e persiste, e o usuário acompanha e baixa o resultado em Excel. As rotas (`POST /api/reports`,
+`GET /api/reports`, `GET /api/reports/{id}`, `GET /api/reports/{id}/excel`) e o contrato da mensagem entram aqui
+junto com os PRs de CP3-I01 e CP3-I03. O estado de cada frente fica em [Andamento do CP3](#andamento-do-cp3).
 
-A referência contém tags, IDs de operação únicos, DTOs de entrada/saída, estados por nome, limites de campos e exemplos válidos/inválidos. ProblemDetails documenta code e traceId. Verificações HTTP conferiram as 13 operações obrigatórias; Chromium carregou a interface sem erros de JavaScript e executou login e consulta administrativa protegida com 200.
+## Testes, cobertura e qualidade
 
-O [arquivo HTTP manual](sources/ExpenseHub.Api/ExpenseHub.Api.http) oferece os dois fluxos e as 13 rotas, com variáveis de ambiente e respostas nomeadas de login/criação. O [guia](docs/DEMO.md#arquivo-http-manual) explica a preparação dos perfis e a ordem das chamadas.
+| Suíte | Conteúdo | Comando |
+|---|---|---|
+| Unitária (`ExpenseHub.UnitTests`) | Regras de estado e autorização, validações, histórico, administração, adaptadores HTTP (controllers, ProblemDetails, auditoria) e contrato OpenAPI via `TestServer` em memória. Sem banco, rede ou broker. | `make test-unit` |
+| Integração (`ExpenseHub.IntegrationTests`) | SQLite real com migrations: seed idempotente, constraints, escopo SQL, concorrência entre contextos, rollback de roles, histórico e pagamento. | `make test-integration` |
+| HTTP (`scripts/Invoke-ExpenseHubVerification.ps1`) | 104 cenários contra a API real em SQLite descartável; relatórios sanitizados em `artifacts/demo/`. | `make demo` |
 
-## Demo automatizada
+**Gate de cobertura unitária:** ≥ 95 % de linhas **e** de branches no total da solução (`make coverage`; o build
+falha abaixo disso). Estado atual: **100 % de linhas e 95,6 % de branches** (Core: 100 % / 100 %). As exclusões
+ficam declaradas só em `ExpenseHub.UnitTests.csproj`: migrations, código gerado, `Program.cs` (composition root,
+exercitado pelos smoke tests nos containers) e adaptadores de I/O real (`ExpenseHub.Core.Persistence`, RabbitMQ),
+cobertos pela suíte de integração. Métodos `async` **não** são excluídos.
 
-```shell
-pwsh -NoProfile -File ./scripts/Invoke-ExpenseHubVerification.ps1
-```
+**Qualidade:** `make quality` executa o mesmo script do workflow oficial `code-quality` (score atual 100/100). O
+workflow, `Directory.Build.props`, `.editorconfig` e os analisadores do professor não são alterados. O build local e
+o CI usam `-warnaserror`.
 
-O executor compila, testa, aplica migrations em SQLite temporário, gera credenciais em memória, inicia a API e executa **104 cenários HTTP**. Ao terminar, encerra seu processo e remove o banco descartável. Relatórios sem senhas/tokens ficam em `artifacts/demo/report.json` e `report.md`. Saída não zero indica falha; conferir status, contagens e SHA. O [guia da demo](docs/DEMO.md) descreve execução contra host existente e alcance das provas. O workflow adicional publica `expensehub-demo-report`, separado do corretor oficial.
+## Matriz de testes
 
-## Testes e qualidade
+Cada requisito aponta para os testes que o comprovam. Linhas novas entram no mesmo PR da funcionalidade.
 
-```shell
-dotnet test ./sources/ExpenseHub.slnx
-pwsh -NoProfile -File ./tests/Invoke-CodeQuality.Unit.Tests.ps1
-pwsh -NoProfile -File ./tests/Invoke-CodeQuality.E2E.ps1
-pwsh -NoProfile -File ./scripts/Invoke-CodeQuality.ps1 -Ci
-```
+| Requisito | Regra verificada | Unitário | Integração | HTTP (demo) |
+|---|---|---|---|---|
+| Identidade | Ator vem do token; roles desconhecidas são descartadas; sem identificador → 401 | `Administration/CurrentActorTests`, `Expenses/ContractEdgeTests` | — | Cadastro e login |
+| Seed | Somente o Admin, idempotente, senha externa | — | `IdentityPersistenceTests` | Admin inicial |
+| Administração | Só Admin; roles conhecidas; não remove o próprio Admin; substituição atômica | `Administration/UserRoleServiceTests`, `Api/AdminUsersControllerTests` | `IdentityPersistenceTests` (rollback) | Atribuição e novo login |
+| Rascunho | Campos do servidor, limites de descrição, valor e data, normalização, só o dono edita `Draft` | `Expenses/DraftTests`, `Expenses/ContractEdgeTests` | `RelationalExpenseTests` (round-trip, rollback da criação) | Draft válido e inválido |
+| Envio e leitura | `Draft → Submitted`; visibilidade por perfil; 404 fora do escopo | `Expenses/SubmissionTests` | `RelationalExpenseTests` (escopo SQL) | Isolamento entre perfis |
+| Matriz de autorização | Todas as uniões de roles × estados; Admin sem acesso implícito | `Expenses/AuthorizationMatrixTests` | — | Conta com todas as roles |
+| Decisões | Aprovar/reprovar, justificativa, sem autoaprovação, repetição → 409 | `Expenses/DecisionTests` | — | Fluxos aprovado e reprovado |
+| Pagamento e histórico | Pagamento único, ator e UTC do servidor, histórico ordenado e visível | `Expenses/PaymentHistoryTests` | `RelationalExpenseTests` (unicidade, rollback) | Fluxo até `Paid` |
+| Concorrência | Revisão como token; decisão obsoleta e pagamento duplicado → 409 sem efeito parcial | — | `RelationalExpenseTests` (`TwoContextsRejectAStaleDecision`, `DuplicatePaymentIsAConflictWithoutAnotherRecord`) | — |
+| Contrato HTTP | Status por rota, `Location`, ProblemDetails com `code`/`traceId`, 500 sanitizado | `Api/ExpensesControllerTests`, `Api/ApiExceptionHandlerTests` | — | Todas as 13 rotas |
+| Auditoria | Log por requisição com método, rota, recurso, ator, `traceId` e status real | `Api/RequestAuditMiddlewareTests` | — | — |
+| OpenAPI | Bearer, tags, status documentados, exemplos, enum de estados, `decimal` | `Api/OpenApiDocumentTests` | — | Contrato OpenAPI |
 
-O workflow oficial permanece intacto. O score está no artefato `code-quality-report`; verificar `score.final`, findings e commit analisado. Os **111 testes unitários** verificam as regras com store substituto e relógio fixo, sem EF, banco ou rede. O projeto separado **ExpenseHub.IntegrationTests** contém oito provas SQLite reais: migrations/seed, round-trip e escopo SQL, constraints, concorrência entre contextos e rollback de roles, histórico e pagamento. Cada fixture usa um arquivo exclusivo com migrations; não usa EF InMemory. Duas inversões temporárias de regras foram detectadas pelos unitários e restauradas; detalhes no registro de execução.
+Execução em matriz no CI: cada suíte roda em **Ubuntu, Windows e macOS** (ver abaixo).
 
-## Documentação e participação
+## Integração contínua
 
-- [Demonstração automatizada e artefatos](docs/DEMO.md)
-- [Execução e validações realizadas](docs/EXECUCAO.md)
-- [Plano técnico e critérios de conclusão](docs/PLANO.md)
-- [Divisão de trabalho, pacotes e autoria](docs/DIVISAO-TRABALHO.md)
-- [Enunciado](docs/ENUNCIADO.md)
-- [Requisitos e 13 endpoints](docs/REQUISITOS.md)
-- [Matriz de autorização](docs/MATRIZ-AUTORIZACAO.md)
-- [Rubrica](docs/RUBRICA.md)
-- [Processo GitHub](docs/PROCESSO-GITHUB.md)
-- [Uso de IA](docs/USO-DE-IA.md)
-- [Regras de qualidade](docs/code-quality-rules.md)
+| Workflow | Jobs |
+|---|---|
+| `code-quality` (`build.yml`, do professor, inalterado) | Build, Gitleaks e score de qualidade |
+| `ci` (`ci.yml`) | `make verify` no Ubuntu (gate de cobertura + resumo no job); matriz `{Unit, Integration} × {Ubuntu, Windows, macOS}`; build das imagens |
+| `expensehub-demo` (`demo.yml`) | Build, testes e os 104 cenários HTTP, com relatório como artefato |
 
-Cada integrante precisa de mais de um commit próprio e contribuição real, preservados na main. Commits desta sessão usam a identidade autenticada de João; as contribuições de Matheus e André continuam previstas para participação individual, sem simulação de autoria e sem trailers de coautoria de IA.
+## Extras
 
-SHA base da cópia do grupo, antes das contribuições: `8f4dac931306f061ba2a3c4aeac1ceac5d520b9e`. Esse é o ponto inicial para auditar participação; o histórico do template original não foi herdado.
+Além do exigido, sempre com um extra por entrega:
+
+| Extra | Onde |
+|---|---|
+| Ambiente 100 % containerizado com `Makefile` (host só com git, Docker e make) | `Makefile`, `compose.yaml` |
+| Gate de cobertura unitária de 95 % (linhas e branches) com relatório HTML | `make coverage` |
+| Matriz de testes por requisito e matriz de SO no CI | [Matriz de testes](#matriz-de-testes), `ci.yml` |
+| Referência interativa Scalar e contrato OpenAPI testado | `/docs`, `Api/OpenApiDocumentTests` |
+| Demonstração HTTP automatizada (104 cenários) com relatórios sanitizados | `make demo` |
+| Provas relacionais em SQLite real (constraints, concorrência, rollback) | `ExpenseHub.IntegrationTests` |
+| Tokens preservados entre recriações (Data Protection em volume) e SQLite em WAL | `Program.cs`, `DatabaseInitializer` |
+| Segredos locais gerados automaticamente | `make env` |
+
+## Andamento do CP3
+
+| Issue | Frente | Responsável | Estado |
+|---|---|---|---|
+| Fundação | Core compartilhado, containers, Makefile, cobertura, CI em matriz | João | Concluída neste PR |
+| [CP3-I01](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/11) | Contrato, cálculo, persistência e Excel | João | Planejada |
+| [CP3-I03](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/13) | RabbitMQ, worker e idempotência | João | Planejada |
+| [CP3-I02](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/12) | Autorização e isolamento | Matheus | Planejada |
+| [CP3-I04](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/14) | Testes próprios significativos | Matheus | Planejada |
+| [CP3-I05](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/15) | Imagens publicadas e Compose reproduzível | André | Planejada |
+| [CP3-I06](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/16) | Experimentos E01–E05 e diagnóstico | André | Planejada |
+| [CP3-I07](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/17) | Qualidade das alterações | Todos | Contínua (`make verify`, `make quality`) |
+
+## Solução de problemas
+
+| Sintoma | Causa e correção |
+|---|---|
+| `all predefined address pools have been fully subnetted` no `make up` | O Docker do host esgotou as faixas de rede. Remova redes sem uso (`docker network prune`) ou crie um `compose.override.yaml` local (já ignorado pelo Git) fixando uma subnet livre em `networks.default.ipam.config`. |
+| `port is already allocated` | Outra aplicação usa a porta. Ajuste `API_PORT` ou `RABBITMQ_MANAGEMENT_PORT` no `.env`. |
+| `set SEED_ADMIN_EMAIL in .env` ao subir | O `.env` não existe ou está incompleto: rode `make env`. |
+| Token deixou de valer | Mudança de roles exige novo login. Se os volumes foram removidos, as chaves e o banco foram recriados. |
+
+## Entregas e referências
+
+- **CP2:** implementação integrada pelo PR #1 deste repositório e marcada pela tag `cp2-final`, que é o commit base
+  evoluído pelo CP3. Issues cobertas: Racass/checkpoint-csharpracass-expensehub#1 a #10.
+- **CP3:** o commit final é registrado aqui quando a última frente for integrada.
+- Documentos do professor herdados do template: [enunciado](docs/ENUNCIADO.md), [requisitos](docs/REQUISITOS.md),
+  [matriz de autorização](docs/MATRIZ-AUTORIZACAO.md), [rubrica](docs/RUBRICA.md),
+  [processo GitHub](docs/PROCESSO-GITHUB.md), [uso de IA](docs/USO-DE-IA.md),
+  [regras de qualidade](docs/code-quality-rules.md).
+- Fluxo de contribuição, convenções e condições do projeto: [`AGENTS.md`](AGENTS.md).

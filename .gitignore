@@ -55,3 +55,7 @@ secrets.json
 *.db
 *.db-wal
 *.db-shm
+
+# Containerized toolchain caches and reports
+.cache/
+compose.override.yaml

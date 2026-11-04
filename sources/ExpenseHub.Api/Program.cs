@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using ExpenseHub.Api.Documentation;
 using ExpenseHub.Api.Infrastructure;
-using ExpenseHub.Api.Persistence;
-using ExpenseHub.Api.Services;
+using ExpenseHub.Core.Persistence;
+using ExpenseHub.Core.Services;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -36,6 +38,14 @@ internal static class Program
             options.DefaultChallengeScheme = IdentityConstants.BearerScheme;
         });
         builder.Services.AddAuthorization();
+        string? keysPath = builder.Configuration["DataProtection:KeysPath"];
+        if (!string.IsNullOrWhiteSpace(keysPath))
+        {
+            // Bearer tokens are protected with these keys; persisting them keeps sessions valid across container recreation.
+            builder.Services.AddDataProtection().SetApplicationName("ExpenseHub")
+                .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+        }
+
         builder.Services.AddScoped<IUserRoleStore, IdentityUserRoleStore>();
         builder.Services.AddScoped<UserRoleService>();
         builder.Services.AddScoped<IExpenseStore, EfExpenseStore>();
@@ -71,6 +81,11 @@ internal static class Program
         });
 
         WebApplication app = builder.Build();
+        if (builder.Configuration.GetValue<bool>("Database:ApplyMigrations"))
+        {
+            await DatabaseInitializer.MigrateAsync(app.Services, app.Lifetime.ApplicationStopping);
+        }
+
         await IdentitySeed.InitializeAsync(app.Services, builder.Configuration, app.Lifetime.ApplicationStopping);
         app.UseExceptionHandler();
         app.UseStatusCodePages(async context =>

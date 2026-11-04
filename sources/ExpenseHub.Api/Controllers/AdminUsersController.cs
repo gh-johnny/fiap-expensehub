@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using ExpenseHub.Api.Contracts.Requests;
-using ExpenseHub.Api.Contracts.Responses;
-using ExpenseHub.Api.Services;
+using ExpenseHub.Core.Contracts.Requests;
+using ExpenseHub.Core.Contracts.Responses;
+using ExpenseHub.Core.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
