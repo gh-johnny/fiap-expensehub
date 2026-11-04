@@ -4,6 +4,6 @@
     "test-projects": ["ExpenseHub.UnitTests.csproj"],
     "mutate": ["**/Reports/**/*.cs"],
     "reporters": ["html", "json", "progress", "cleartext"],
-    "thresholds": { "high": 95, "low": 90, "break": 95 }
+    "thresholds": { "high": 99, "low": 95, "break": 95 }
   }
 }

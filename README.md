@@ -404,8 +404,8 @@ mostram o mesmo SHA; depois de `make release-recreate`, o token obtido antes con
 | HTTP (`scripts/Invoke-ExpenseHubVerification.ps1`) | 104 cenários contra a API real em SQLite descartável; relatórios sanitizados em `artifacts/demo/`. | `make demo` |
 
 **Gate de cobertura unitária:** ≥ 95 % de linhas **e** de branches no total da solução (`make coverage`; o build
-falha abaixo disso). Estado atual: **100 % de linhas e 98,5 % de branches** (Core: 100 % / 100 %), com 324 testes
-unitários e 14 de integração. As exclusões ficam declaradas só em `ExpenseHub.UnitTests.csproj`: migrations,
+falha abaixo disso). Estado atual, com as seis frentes do CP3 integradas: **100 % de linhas e 97,4 % de branches**
+(Core: 100 % / 100 %), com 332 testes unitários e 14 de integração. As exclusões ficam declaradas só em `ExpenseHub.UnitTests.csproj`: migrations,
 código gerado, `Program.cs` (composition root, exercitado pelos smoke tests nos containers) e adaptadores de I/O
 real (`ExpenseHub.Core.Persistence`, RabbitMQ), cobertos pela suíte de integração. Métodos `async` **não** são
 excluídos.
