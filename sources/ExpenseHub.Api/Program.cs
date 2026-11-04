@@ -4,7 +4,9 @@ using System.IO;
 using System.Threading.Tasks;
 using ExpenseHub.Api.Documentation;
 using ExpenseHub.Api.Infrastructure;
+using ExpenseHub.Core.Messaging.RabbitMq;
 using ExpenseHub.Core.Persistence;
+using ExpenseHub.Core.Reports;
 using ExpenseHub.Core.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
@@ -16,6 +18,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
 
 namespace ExpenseHub.Api;
@@ -51,6 +54,12 @@ internal static class Program
         builder.Services.AddScoped<IExpenseStore, EfExpenseStore>();
         builder.Services.AddScoped<ExpenseService>();
         builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.Configure<RabbitMqOptions>(builder.Configuration.GetSection(RabbitMqOptions.SectionName));
+        builder.Services.AddSingleton(services => new RabbitMqConnectionProvider(
+            services.GetRequiredService<IOptions<RabbitMqOptions>>(), "expensehub-api"));
+        builder.Services.AddScoped<IReportPublisher, RabbitMqReportPublisher>();
+        builder.Services.AddScoped<IReportStore, EfReportStore>();
+        builder.Services.AddScoped<ReportService>();
         builder.Services.AddExceptionHandler<ApiExceptionHandler>();
         builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
         {
