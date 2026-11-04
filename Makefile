@@ -23,6 +23,8 @@ DOTNET := docker run --rm $(TTY) \
 	-e DOTNET_NOLOGO=1 -e DOTNET_CLI_TELEMETRY_OPTOUT=1 -e DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 \
 	-e GITHUB_ACTIONS -e GITHUB_SHA \
 	-v "$(CURDIR)":/work -w /work $(SDK_IMAGE)
+# Local tools resolve through a per-container cache, so targets that call them restore first (fast, offline).
+TOOLS := dotnet tool restore --verbosity quiet > /dev/null
 
 .PHONY: help
 help: ## List every target with its description
@@ -68,14 +70,14 @@ test-integration: build ## Run integration tests against real SQLite files
 
 .PHONY: coverage
 coverage: build ## Unit coverage with the 95 % line+branch gate; HTML report in artifacts/coverage/report
-	$(DOTNET) bash -c 'dotnet test $(UNIT_TESTS) --no-build -p:CollectCoverage=true \
+	$(DOTNET) bash -c '$(TOOLS) && dotnet test $(UNIT_TESTS) --no-build -p:CollectCoverage=true \
 		&& dotnet reportgenerator -reports:artifacts/coverage/unit/coverage.cobertura.xml \
 			-targetdir:artifacts/coverage/report -reporttypes:"Html;TextSummary;MarkdownSummaryGithub" \
 		&& cat artifacts/coverage/report/Summary.txt | head -20'
 
 .PHONY: coverage-integration
 coverage-integration: build ## Informational coverage of the integration suite (I/O adapters)
-	$(DOTNET) bash -c 'dotnet test $(INTEGRATION_TESTS) --no-build -p:CollectCoverage=true \
+	$(DOTNET) bash -c '$(TOOLS) && dotnet test $(INTEGRATION_TESTS) --no-build -p:CollectCoverage=true \
 		&& dotnet reportgenerator -reports:artifacts/coverage/integration/coverage.cobertura.xml \
 			-targetdir:artifacts/coverage/integration-report -reporttypes:"Html;TextSummary" \
 		&& head -20 artifacts/coverage/integration-report/Summary.txt'
@@ -123,7 +125,7 @@ shell: ## Interactive shell inside the SDK container
 .PHONY: migration
 migration: restore ## Add an EF Core migration: make migration NAME=AddSomething
 	@test -n "$(NAME)" || (echo "Usage: make migration NAME=MigrationName" && exit 1)
-	$(DOTNET) dotnet ef migrations add $(NAME) --project sources/ExpenseHub.Core --startup-project sources/ExpenseHub.Api
+	$(DOTNET) bash -c '$(TOOLS) && dotnet ef migrations add $(NAME) --project sources/ExpenseHub.Core --startup-project sources/ExpenseHub.Api'
 
 .PHONY: clean
 clean: ## Remove build outputs and reports (keeps the NuGet cache and Docker volumes)
