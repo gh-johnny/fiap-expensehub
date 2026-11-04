@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading.Tasks;
 using ExpenseHub.Api.Documentation;
 using ExpenseHub.Api.Infrastructure;
+using ExpenseHub.Core;
 using ExpenseHub.Core.Messaging.RabbitMq;
 using ExpenseHub.Core.Persistence;
 using ExpenseHub.Core.Reports;
@@ -120,6 +121,8 @@ internal static class Program
 
         app.MapGet("/health", () => Results.Ok(new { status = "ok" }))
             .WithName("GetHealth");
+        app.MapGet("/version", () => Results.Ok(new { commit = BuildInfo.Commit }))
+            .WithName("GetVersion");
 
         await app.RunAsync();
     }

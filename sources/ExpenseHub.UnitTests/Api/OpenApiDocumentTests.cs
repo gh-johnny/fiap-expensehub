@@ -38,6 +38,7 @@ public sealed class OpenApiDocumentTests
         app.MapControllers();
         app.MapOpenApi();
         app.MapGet("/health", () => Results.Ok()).AllowAnonymous();
+        app.MapGet("/version", () => Results.Ok()).AllowAnonymous();
         app.MapPost("/register", () => Results.Ok());
         app.MapGet("/api/expenses/public-probe", () => Results.Ok()).RequireAuthorization().AllowAnonymous();
         await app.StartAsync(testContext.CancellationToken);
@@ -86,6 +87,7 @@ public sealed class OpenApiDocumentTests
     [DataRow("/api/reports", "post", "Reports")]
     [DataRow("/api/reports/{id}/excel", "get", "Reports")]
     [DataRow("/health", "get", "System")]
+    [DataRow("/version", "get", "System")]
     [DataRow("/register", "post", "Identity")]
     public void AssignsTags(string path, string method, string tag)
         => Assert.AreEqual(tag, Operation(path, method).GetProperty("tags")[0].GetString());
@@ -132,6 +134,7 @@ public sealed class OpenApiDocumentTests
     /// <param name="path">The OpenAPI path.</param>
     [TestMethod]
     [DataRow("/health")]
+    [DataRow("/version")]
     [DataRow("/api/expenses/public-probe")]
     public void AnonymousEndpointsHaveNoSecurity(string path)
         => Assert.AreEqual(0, Operation(path, "get").GetProperty("security").GetArrayLength());

@@ -16,12 +16,18 @@ COPY sources/ExpenseHub.Api/ sources/ExpenseHub.Api/
 RUN dotnet publish sources/ExpenseHub.Api/ExpenseHub.Api.csproj -c Release -o /app --no-restore -p:UseAppHost=false
 
 FROM ${RUNTIME_IMAGE} AS runtime
+# The commit identifies the delivered version: CI passes the full SHA, local builds pass "local".
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.title="expensehub-api" \
+      org.opencontainers.image.source="https://github.com/gh-johnny/fiap-expensehub" \
+      org.opencontainers.image.revision="$GIT_SHA"
 WORKDIR /app
 # /data holds the shared SQLite database and the Data Protection keys (mounted as a volume).
 RUN mkdir -p /data && chown "$APP_UID" /data
 COPY --from=build /app .
 USER $APP_UID
-ENV ASPNETCORE_HTTP_PORTS=8080 \
+ENV APP_VERSION=$GIT_SHA \
+    ASPNETCORE_HTTP_PORTS=8080 \
     ConnectionStrings__ExpenseHub="Data Source=/data/expensehub.db" \
     DataProtection__KeysPath=/data/keys
 EXPOSE 8080
