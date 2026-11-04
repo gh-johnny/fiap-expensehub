@@ -16,7 +16,7 @@
     <CoverletOutputFormat>cobertura</CoverletOutputFormat>
     <CoverletOutput>$(MSBuildThisFileDirectory)../../artifacts/coverage/unit/</CoverletOutput>
     <Include>[ExpenseHub.Core]*,[ExpenseHub.Api]*,[ExpenseHub.Worker]*</Include>
-    <Exclude>[ExpenseHub.Core]ExpenseHub.Core.Persistence.*,[ExpenseHub.Core]ExpenseHub.Core.Migrations.*,[ExpenseHub.Worker]ExpenseHub.Worker.Messaging.RabbitMq*</Exclude>
+    <Exclude>[ExpenseHub.Core]ExpenseHub.Core.Persistence.*,[ExpenseHub.Core]ExpenseHub.Core.Migrations.*,[ExpenseHub.Core]ExpenseHub.Core.Messaging.RabbitMq.*,[ExpenseHub.Worker]ExpenseHub.Worker.Messaging.*</Exclude>
     <ExcludeByFile>**/Migrations/*.cs,**/Program.cs,**/obj/**/*.cs</ExcludeByFile>
     <ExcludeByAttribute>GeneratedCodeAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
     <Threshold>95</Threshold>

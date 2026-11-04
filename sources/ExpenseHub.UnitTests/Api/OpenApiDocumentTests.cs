@@ -83,6 +83,8 @@ public sealed class OpenApiDocumentTests
     [DataRow("/api/expenses", "post", "Expenses")]
     [DataRow("/api/expenses/{id}/history", "get", "History")]
     [DataRow("/api/admin/users", "get", "Admin")]
+    [DataRow("/api/reports", "post", "Reports")]
+    [DataRow("/api/reports/{id}/excel", "get", "Reports")]
     [DataRow("/health", "get", "System")]
     [DataRow("/register", "post", "Identity")]
     public void AssignsTags(string path, string method, string tag)
@@ -96,6 +98,23 @@ public sealed class OpenApiDocumentTests
         string[] statuses = approve.GetProperty("responses").EnumerateObject().Select(response => response.Name).ToArray();
         CollectionAssert.IsSubsetOf(_mutationStatuses, statuses);
         Assert.AreEqual(1, approve.GetProperty("security").GetArrayLength());
+    }
+
+    /// <summary>The report request documents 503 (unconfirmed publication) and the download documents 409 (not Completed).</summary>
+    [TestMethod]
+    public void ReportRoutesDocumentTheirSpecificStatuses()
+    {
+        Assert.IsTrue(Operation("/api/reports", "post").GetProperty("responses").TryGetProperty("503", out _));
+        Assert.IsTrue(Operation("/api/reports", "post").GetProperty("responses").TryGetProperty("202", out _));
+        JsonElement excel = Operation("/api/reports/{id}/excel", "get").GetProperty("responses");
+        Assert.IsTrue(excel.TryGetProperty("409", out _));
+        Assert.IsTrue(excel.TryGetProperty("404", out _));
+        Assert.IsTrue(excel.GetProperty("200").GetProperty("content")
+            .TryGetProperty("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", out _));
+        Assert.IsFalse(Operation("/api/reports/{id}", "get").GetProperty("responses").TryGetProperty("409", out _));
+        JsonElement examples = Body("/api/reports", "post").GetProperty("examples");
+        Assert.AreEqual("Mine", examples.GetProperty("mine").GetProperty("value").GetProperty("scope").GetString());
+        Assert.IsTrue(examples.TryGetProperty("invalid", out _));
     }
 
     /// <summary>Reads document 404 but never 400 or 409.</summary>
