@@ -37,6 +37,10 @@ public sealed class EfReportStore : IReportStore
             .SingleOrDefaultAsync(report => report.Id == id && report.RequesterId == requesterId, cancellationToken);
 
     /// <inheritdoc />
+    public Task<ReportRequest?> LoadForProcessingAsync(Guid id, CancellationToken cancellationToken)
+        => _context.ReportRequests.SingleOrDefaultAsync(report => report.Id == id, cancellationToken);
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<ReportExpenseRow>> LoadRowsAsync(ReportRequest report, CancellationToken cancellationToken)
         => await _context.Expenses.AsNoTracking().Where(ReportCalculator.Eligible(report))
             .Select(expense => new ReportExpenseRow(expense.Status, expense.Amount)).ToListAsync(cancellationToken);

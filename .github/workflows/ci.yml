@@ -88,3 +88,6 @@ jobs:
 
       - name: Build web image
         run: docker build -f sources/ExpenseHub.Api/Dockerfile -t expensehub-api:ci .
+
+      - name: Build worker image
+        run: docker build -f sources/ExpenseHub.Worker/Dockerfile -t expensehub-worker:ci .
