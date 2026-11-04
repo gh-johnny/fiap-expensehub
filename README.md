@@ -206,6 +206,7 @@ Scalar (`/docs`) ou o arquivo `.http`.
   **inclusivos**, nunca a data de criação.
 - `scope`: `Mine` ou `Global` (sem diferenciar maiúsculas; valores numéricos como `"1"` são rejeitados). O
   solicitante vem **só do token**: não existe `ownerId` no contrato.
+- Permissão por perfil e escopo (veja abaixo): `Mine` exige Employee, `Global` exige Auditor.
 - Cada POST válido cria uma solicitação nova; não há deduplicação de cliente.
 
 Envelope (todas as rotas; instantes em UTC):
@@ -234,9 +235,31 @@ nunca recalculam, então alterar um reembolso depois da conclusão não muda o r
 período, instante de geração e a tabela `Status | Count | Amount` com os cinco estados e o total geral, em células
 numéricas. Gerada com ClosedXML (MIT) a partir do resultado persistido, sem nova mensagem na fila.
 
+**Autorização e isolamento (CP3-I02).** Solicitar depende do perfil e do escopo. Consultar depende só de quem criou
+a solicitação:
+
+| Perfil | `Mine` | `Global` | Listagem, detalhe e Excel |
+|---|---|---|---|
+| Employee | Sim | Não → 403 | Só as próprias |
+| Auditor | Não → 403 (salvo se também Employee) | Sim | Só as próprias. O privilégio global vale para os dados do relatório dele, não para as solicitações de outras pessoas |
+| Employee + Auditor | Sim | Sim | Só as próprias |
+| Admin, Approver ou Finance sem os perfis acima | 403 | 403 | Só as próprias (lista vazia; 404 para qualquer id) |
+
+- A regra fica em `ReportAuthorization` e roda em `ReportService.RequestAsync` **depois** da validação de entrada e
+  **antes** de gravar. Por isso entrada inválida responde 400 para qualquer perfil, e uma negação não grava nem
+  publica nada.
+- `POST /api/reports` também exige Employee ou Auditor no pipeline (`[Authorize(Roles)]`). Sem nenhum dos dois, o 403
+  sai antes do serviço com `code` `auth.forbidden`. Com um deles, mas sem o do escopo pedido, o 403 sai do serviço
+  com `report.scope_forbidden`.
+- Listagem, detalhe e Excel filtram pelo criador **no SQL** (`FindOwnedAsync`/`ListOwnedAsync`): solicitação alheia
+  responde 404, igual a uma inexistente, inclusive para Auditor e Admin.
+- O worker calcula com o solicitante e o escopo **gravados**. A mensagem carrega só o `reportId`. `Mine` filtra pelo
+  solicitante registrado, mesmo quando ele também é Auditor.
+
 | Cenário | Resposta |
 |---|---|
 | Sem autenticação | 401 |
+| Perfil sem permissão para o escopo pedido | 403 (`report.scope_forbidden`, ou `auth.forbidden` sem Employee nem Auditor); nada é gravado nem publicado |
 | Datas ausentes, inválidas ou invertidas; escopo inválido | 400 (`report.invalid_period` / `report.invalid_scope`), nada é gravado nem publicado |
 | Detalhe ou Excel inexistente ou de outro usuário | 404 (`report.not_found`) |
 | Excel de solicitação própria `Pending`, `Processing` ou `Failed` | 409 (`report.not_completed`) |
@@ -299,8 +322,16 @@ Verificado no Compose:
   `completedAt` e `generatedAt` ficam idênticos.
 - **Recriação:** depois de recriar API e worker, o mesmo token e o resultado anterior continuam válidos.
 
-> A matriz de perfil × escopo (`Mine` para Employee, `Global` para Auditor, demais → 403) chega com CP3-I02. Ver
-> [andamento](#andamento-do-cp3).
+Autorização verificada no Compose com duas contas Employee, uma Auditor e uma Approver, com reembolsos de R$ 100 e
+R$ 50 do Employee A e de R$ 200 do Employee B no período:
+- anônimo → 401;
+- Employee pedindo `Global` → 403 `report.scope_forbidden`; Auditor pedindo `Mine` → 403 `report.scope_forbidden`;
+  Approver pedindo `Mine` → 403 `auth.forbidden`;
+- Employee A pedindo `Mine` → 202, `Completed` com 2 / R$ 150 (sem o reembolso do Employee B);
+- Auditor pedindo `Global` → 202, `Completed` com 3 / R$ 350;
+- detalhe e Excel do relatório do Employee A pedidos pelo Auditor ou pelo Employee B → 404; o Employee A recebe 404
+  no detalhe do relatório do Auditor;
+- listagem do Employee B e do Admin → vazia; listagem do Auditor → só o próprio relatório.
 
 ## Testes, cobertura e qualidade
 
@@ -311,11 +342,11 @@ Verificado no Compose:
 | HTTP (`scripts/Invoke-ExpenseHubVerification.ps1`) | 104 cenários contra a API real em SQLite descartável; relatórios sanitizados em `artifacts/demo/`. | `make demo` |
 
 **Gate de cobertura unitária:** ≥ 95 % de linhas **e** de branches no total da solução (`make coverage`; o build
-falha abaixo disso). Estado atual: **100 % de linhas e 97,2 % de branches** (Core: 100 % / 100 %), com 212 testes
-unitários e 14 de integração. As exclusões
-ficam declaradas só em `ExpenseHub.UnitTests.csproj`: migrations, código gerado, `Program.cs` (composition root,
-exercitado pelos smoke tests nos containers) e adaptadores de I/O real (`ExpenseHub.Core.Persistence`, RabbitMQ),
-cobertos pela suíte de integração. Métodos `async` **não** são excluídos.
+falha abaixo disso). Estado atual: **100 % de linhas e 98,4 % de branches** (Core: 100 % / 100 %), com 265 testes
+unitários e 14 de integração. As exclusões ficam declaradas só em `ExpenseHub.UnitTests.csproj`: migrations,
+código gerado, `Program.cs` (composition root, exercitado pelos smoke tests nos containers) e adaptadores de I/O
+real (`ExpenseHub.Core.Persistence`, RabbitMQ), cobertos pela suíte de integração. Métodos `async` **não** são
+excluídos.
 
 **Qualidade:** `make quality` executa o mesmo script do workflow oficial `code-quality` (score atual 100/100). O
 workflow, `Directory.Build.props`, `.editorconfig` e os analisadores do professor não são alterados. O build local e
@@ -345,6 +376,7 @@ Cada requisito aponta para os testes que o comprovam. Linhas novas entram no mes
 | Relatório — leitura | Lista só os próprios, mais recentes primeiro; detalhe alheio → 404; resultado persistido sem recálculo; erro sanitizado em `Failed` | `Reports/ReportServiceTests`, `Reports/ReportContractTests` | `RelationalReportTests` (consultas por dono em SQL, UTC) | — |
 | Relatório — Excel | `.xlsx` real (ZIP), metadados, cinco estados e total em células numéricas iguais ao resultado salvo; vazio com zeros; 409 fora de `Completed`; 404 alheio; nome `report-{id}.xlsx` | `Reports/ReportWorkbookTests`, `Reports/ReportServiceTests`, `Api/ReportsControllerTests` | — | — |
 | Mensagem | Corpo só com `reportId`; JSON inválido, vazio ou id zero rejeitados; campos extras (ex.: `ownerId`) ignorados | `Reports/ReportRequestedMessageTests` | — | — |
+| Relatório — autorização | 32 combinações de roles × `Mine`/`Global` contra uma tabela explícita (permitido grava e publica uma vez; negado → 403 `report.scope_forbidden` sem gravar nem publicar); 400 antes de 403; mensagem de negação sanitizada; solicitante do token e contrato sem campo de dono; Employees isolados entre si; Auditor, Admin, Approver e Finance sem acesso a solicitações alheias (lista, detalhe e Excel → 404); solicitante e escopo gravados guiam o worker (`Mine` de Employee + Auditor soma só os próprios) | `Reports/ReportAuthorizationTests`, `Api/OpenApiDocumentTests` | `RelationalReportTests` (consultas por dono em SQL) | — |
 | Contrato HTTP de relatórios | 202 + `Location`, 503/409 documentados no OpenAPI, exemplos de corpo | `Api/ReportsControllerTests`, `Api/OpenApiDocumentTests` | — | — |
 | Worker — conclusão | `Pending` → `Processing` → `Completed` com resultado, `startedAt`, `completedAt`, `attempts`; dados lidos no processamento; escopo e solicitante persistidos | `Reports/ReportProcessorTests` | `RelationalReportProcessingTests` (estado e resultado no mesmo commit) | — |
 | Worker — idempotência | `Completed`/`Failed` reentregues sem novo efeito, inclusive com um processor novo (worker reiniciado); alteração posterior de reembolso não muda o salvo | `Reports/ReportProcessorTests` | `RelationalReportProcessingTests` | — |
@@ -380,6 +412,7 @@ Além do exigido, sempre com um extra por entrega:
 | Exemplo do professor reproduzido em teste unitário **e** em SQL real | `ReportCalculatorTests`, `RelationalReportTests` |
 | Limite de tentativas persistido (`attempts`), classificação transitória × definitiva e corrida resolvida por token de revisão | `ReportProcessor`, `RelationalReportProcessingTests` |
 | Logs do worker com `[LoggerMessage]` (source generator) e escopo `ReportId` | `ReportConsumer`, `ReportProcessor` |
+| Matriz de autorização de relatórios **exaustiva**: 32 combinações de roles × 2 escopos contra uma tabela explícita, e prova da solicitação até o cálculo do worker | `Reports/ReportAuthorizationTests` |
 
 ## Andamento do CP3
 
@@ -388,14 +421,14 @@ Além do exigido, sempre com um extra por entrega:
 | Fundação | Core compartilhado, containers, Makefile, cobertura, CI em matriz | João | Concluída (PR #2) |
 | [CP3-I01](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/11) | Contrato, cálculo, persistência, Excel e publicação confirmada | João | Concluída (PR #3) |
 | [CP3-I03](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/13) | Worker, ack após persistir, idempotência e falhas | João | Concluída neste PR |
-| [CP3-I02](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/12) | Autorização e isolamento | Matheus | Planejada — [plano](docs/plans/matheus-cp3-i02-i04.md#2-cp3-i02--autorização-e-isolamento) |
+| [CP3-I02](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/12) | Autorização e isolamento | Matheus | Concluída neste PR — [plano](docs/plans/matheus-cp3-i02-i04.md#2-cp3-i02--autorização-e-isolamento) |
 | [CP3-I04](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/14) | Testes próprios significativos + mutação | Matheus | Planejada — [plano](docs/plans/matheus-cp3-i02-i04.md#3-cp3-i04--testes-próprios-significativos) |
 | [CP3-I05](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/15) | Imagens publicadas por commit, Compose de release, Trivy + SBOM | André | Planejada — [plano](docs/plans/andre-cp3-i05-i06.md#2-cp3-i05--publicação-e-execução-reproduzível) |
 | [CP3-I06](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/16) | Dossiê E01–E05, diagnóstico e `make experiments` | André | Planejada — [plano](docs/plans/andre-cp3-i05-i06.md#3-cp3-i06--experimentos-e-diagnóstico) |
+| [CP3-I07](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/17) | Qualidade das alterações | Todos | Contínua (`make verify`, `make quality`) |
 
 Ordem de dependência: CP3-I02 antes do E04 (CP3-I06); CP3-I05 antes dos experimentos com imagens publicadas;
 CP3-I04 depois do CP3-I02.
-| [CP3-I07](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/17) | Qualidade das alterações | Todos | Contínua (`make verify`, `make quality`) |
 
 ## Solução de problemas
 
