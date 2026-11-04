@@ -44,6 +44,25 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  worker:
+    build:
+      context: .
+      dockerfile: sources/ExpenseHub.Worker/Dockerfile
+    image: expensehub-worker:local
+    environment:
+      RabbitMq__Host: rabbitmq
+      RabbitMq__UserName: "${RABBITMQ_USER}"
+      RabbitMq__Password: "${RABBITMQ_PASSWORD}"
+    volumes:
+      - expensehub-data:/data
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      # The web host applies the migrations, so the worker starts only after it is healthy.
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   expensehub-data:
   rabbitmq-data:
