@@ -131,7 +131,7 @@ public sealed class ReportServiceTests
     [TestMethod]
     public async Task StorageFailureBeforeRegistrationPublishesNothing()
     {
-        _store.FailSave = true;
+        _store.SaveFailure = _ => new InvalidOperationException("Simulated database outage.");
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(
             () => Service().RequestAsync(Actor("requester"), Valid(), CancellationToken.None));
         Assert.IsEmpty(_store.Reports);

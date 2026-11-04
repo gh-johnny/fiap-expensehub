@@ -8,7 +8,10 @@ using ExpenseHub.Core.Reports;
 
 namespace ExpenseHub.UnitTests.TestDoubles;
 
-/// <summary>In-memory report store that applies the same eligibility predicate EF Core translates to SQL.</summary>
+/// <summary>
+/// In-memory report store that applies the same eligibility predicate EF Core translates to SQL, with failure
+/// injection for each boundary the worker crosses.
+/// </summary>
 internal sealed class ReportStoreFake : IReportStore
 {
     private readonly List<ReportRequest> _staged = new();
@@ -19,17 +22,25 @@ internal sealed class ReportStoreFake : IReportStore
 
     public int Saves { get; private set; }
 
-    public bool FailSave { get; set; }
+    public int RowLoads { get; private set; }
+
+    /// <summary>Gets or sets the failure for the n-th save call (1-based), or null to succeed.</summary>
+    public Func<int, Exception?> SaveFailure { get; set; } = _ => null;
+
+    public Exception? LoadFailure { get; set; }
+
+    public Exception? RowsFailure { get; set; }
 
     public void Add(ReportRequest report) => _staged.Add(report);
 
     public Task SaveAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (FailSave)
+        Exception? failure = SaveFailure(Saves + 1);
+        if (failure is not null)
         {
             _staged.Clear();
-            throw new InvalidOperationException("Simulated database outage.");
+            throw failure;
         }
 
         foreach (ReportRequest report in _staged)
@@ -57,9 +68,27 @@ internal sealed class ReportStoreFake : IReportStore
         return Task.FromResult(report?.RequesterId == requesterId ? report : null);
     }
 
+    public Task<ReportRequest?> LoadForProcessingAsync(Guid id, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (LoadFailure is not null)
+        {
+            throw LoadFailure;
+        }
+
+        Reports.TryGetValue(id, out ReportRequest? report);
+        return Task.FromResult(report);
+    }
+
     public Task<IReadOnlyList<ReportExpenseRow>> LoadRowsAsync(ReportRequest report, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        RowLoads++;
+        if (RowsFailure is not null)
+        {
+            throw RowsFailure;
+        }
+
         Func<Expense, bool> eligible = ReportCalculator.Eligible(report).Compile();
         IReadOnlyList<ReportExpenseRow> rows = Expenses.Where(eligible)
             .Select(expense => new ReportExpenseRow(expense.Status, expense.Amount)).ToList();
