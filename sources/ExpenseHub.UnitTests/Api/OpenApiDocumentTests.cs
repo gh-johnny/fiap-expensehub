@@ -38,6 +38,7 @@ public sealed class OpenApiDocumentTests
         app.MapControllers();
         app.MapOpenApi();
         app.MapGet("/health", () => Results.Ok()).AllowAnonymous();
+        app.MapGet("/version", () => Results.Ok()).AllowAnonymous();
         app.MapPost("/register", () => Results.Ok());
         app.MapGet("/api/expenses/public-probe", () => Results.Ok()).RequireAuthorization().AllowAnonymous();
         await app.StartAsync(testContext.CancellationToken);
@@ -86,6 +87,7 @@ public sealed class OpenApiDocumentTests
     [DataRow("/api/reports", "post", "Reports")]
     [DataRow("/api/reports/{id}/excel", "get", "Reports")]
     [DataRow("/health", "get", "System")]
+    [DataRow("/version", "get", "System")]
     [DataRow("/register", "post", "Identity")]
     public void AssignsTags(string path, string method, string tag)
         => Assert.AreEqual(tag, Operation(path, method).GetProperty("tags")[0].GetString());
@@ -117,6 +119,21 @@ public sealed class OpenApiDocumentTests
         Assert.IsTrue(examples.TryGetProperty("invalid", out _));
     }
 
+    /// <summary>The report request documents the profile x scope rule: a Global example for Auditor and the 403 denial.</summary>
+    [TestMethod]
+    public void ReportRequestDocumentsTheScopePermissions()
+    {
+        JsonElement post = Operation("/api/reports", "post");
+        Assert.IsTrue(post.GetProperty("responses").TryGetProperty("403", out _));
+        string description = post.GetProperty("description").GetString()!;
+        Assert.Contains("Mine requires Employee", description);
+        Assert.Contains("Global requires Auditor", description);
+        Assert.Contains("report.scope_forbidden", description);
+        JsonElement global = Body("/api/reports", "post").GetProperty("examples").GetProperty("global");
+        Assert.AreEqual("Global", global.GetProperty("value").GetProperty("scope").GetString());
+        Assert.Contains("Auditor", global.GetProperty("summary").GetString()!);
+    }
+
     /// <summary>Reads document 404 but never 400 or 409.</summary>
     [TestMethod]
     public void ProtectedReadOmitsMutationStatuses()
@@ -132,6 +149,7 @@ public sealed class OpenApiDocumentTests
     /// <param name="path">The OpenAPI path.</param>
     [TestMethod]
     [DataRow("/health")]
+    [DataRow("/version")]
     [DataRow("/api/expenses/public-probe")]
     public void AnonymousEndpointsHaveNoSecurity(string path)
         => Assert.AreEqual(0, Operation(path, "get").GetProperty("security").GetArrayLength());

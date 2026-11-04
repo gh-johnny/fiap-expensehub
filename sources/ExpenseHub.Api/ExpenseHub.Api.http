@@ -26,7 +26,7 @@ Content-Type: application/json
 GET {{baseUrl}}/api/admin/users
 Authorization: Bearer {{adminLogin.response.body.$.accessToken}}
 
-### Replace that account's roles (Employee, Approver or Finance)
+### Replace that account's roles (Employee, Approver, Finance or Auditor)
 PUT {{baseUrl}}/api/admin/users/{{$processEnv EXPENSEHUB_ACCOUNT_ID}}/roles
 Authorization: Bearer {{adminLogin.response.body.$.accessToken}}
 Content-Type: application/json
@@ -53,6 +53,13 @@ POST {{baseUrl}}/login?useCookies=false
 Content-Type: application/json
 
 { "email": "{{$processEnv EXPENSEHUB_FINANCE_EMAIL}}", "password": "{{accountPassword}}" }
+
+### Auditor login (a different account, granted Auditor only)
+# @name auditorLogin
+POST {{baseUrl}}/login?useCookies=false
+Content-Type: application/json
+
+{ "email": "{{$processEnv EXPENSEHUB_AUDITOR_EMAIL}}", "password": "{{accountPassword}}" }
 
 ### Create Draft
 # @name createExpense
@@ -147,3 +154,43 @@ Authorization: Bearer {{employeeLogin.response.body.$.accessToken}}
 ### CP3 — another account cannot read the report (404)
 GET {{baseUrl}}/api/reports/{{createReport.response.body.$.id}}
 Authorization: Bearer {{approverLogin.response.body.$.accessToken}}
+
+### CP3-I02 — anonymous request is refused (401)
+POST {{baseUrl}}/api/reports
+Content-Type: application/json
+
+{ "fromDate": "{{$processEnv EXPENSEHUB_REPORT_FROM}}", "toDate": "{{$processEnv EXPENSEHUB_REPORT_TO}}", "scope": "Mine" }
+
+### CP3-I02 — Employee requests Global (403 report.scope_forbidden; nothing is queued)
+POST {{baseUrl}}/api/reports
+Authorization: Bearer {{employeeLogin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "fromDate": "{{$processEnv EXPENSEHUB_REPORT_FROM}}", "toDate": "{{$processEnv EXPENSEHUB_REPORT_TO}}", "scope": "Global" }
+
+### CP3-I02 — Approver without Employee or Auditor requests Mine (403)
+POST {{baseUrl}}/api/reports
+Authorization: Bearer {{approverLogin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "fromDate": "{{$processEnv EXPENSEHUB_REPORT_FROM}}", "toDate": "{{$processEnv EXPENSEHUB_REPORT_TO}}", "scope": "Mine" }
+
+### CP3-I02 — Auditor requests Global (202; sums every employee's reimbursements in the period)
+# @name auditorReport
+POST {{baseUrl}}/api/reports
+Authorization: Bearer {{auditorLogin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "fromDate": "{{$processEnv EXPENSEHUB_REPORT_FROM}}", "toDate": "{{$processEnv EXPENSEHUB_REPORT_TO}}", "scope": "Global" }
+
+### CP3-I02 — Auditor reads the Employee's report (404: Auditor only reads its own requests)
+GET {{baseUrl}}/api/reports/{{createReport.response.body.$.id}}
+Authorization: Bearer {{auditorLogin.response.body.$.accessToken}}
+
+### CP3-I02 — Auditor downloads the Employee's report (404, no file)
+GET {{baseUrl}}/api/reports/{{createReport.response.body.$.id}}/excel
+Authorization: Bearer {{auditorLogin.response.body.$.accessToken}}
+
+### CP3-I02 — Employee reads the Auditor's Global report (404)
+GET {{baseUrl}}/api/reports/{{auditorReport.response.body.$.id}}
+Authorization: Bearer {{employeeLogin.response.body.$.accessToken}}

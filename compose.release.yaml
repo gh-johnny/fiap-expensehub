@@ -1,0 +1,62 @@
+# ExpenseHub — runs the PUBLISHED images (CP3-I05). Nothing is built here.
+# Set IMAGE_TAG in .env to the full commit SHA published by the release workflow, then `make release-up`.
+name: fiap-expensehub-release
+
+services:
+  rabbitmq:
+    image: rabbitmq:4.1.4-management
+    # A fixed hostname keeps the node name, and therefore the persisted queues, across recreations.
+    hostname: expensehub-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: "${RABBITMQ_USER?set RABBITMQ_USER in .env}"
+      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_PASSWORD?set RABBITMQ_PASSWORD in .env}"
+    ports:
+      - "127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  api:
+    image: "ghcr.io/gh-johnny/fiap-expensehub-api:${IMAGE_TAG:?set IMAGE_TAG in .env to the published commit SHA}"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Database__ApplyMigrations: "true"
+      Seed__AdminEmail: "${SEED_ADMIN_EMAIL?set SEED_ADMIN_EMAIL in .env}"
+      Seed__AdminPassword: "${SEED_ADMIN_PASSWORD?set SEED_ADMIN_PASSWORD in .env}"
+      RabbitMq__Host: rabbitmq
+      RabbitMq__UserName: "${RABBITMQ_USER}"
+      RabbitMq__Password: "${RABBITMQ_PASSWORD}"
+    ports:
+      - "127.0.0.1:${API_PORT:-5080}:8080"
+    volumes:
+      - expensehub-data:/data
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    image: "ghcr.io/gh-johnny/fiap-expensehub-worker:${IMAGE_TAG:?set IMAGE_TAG in .env to the published commit SHA}"
+    environment:
+      RabbitMq__Host: rabbitmq
+      RabbitMq__UserName: "${RABBITMQ_USER}"
+      RabbitMq__Password: "${RABBITMQ_PASSWORD}"
+    volumes:
+      - expensehub-data:/data
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      # The web host applies the migrations, so the worker starts only after it is healthy.
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  expensehub-data:
+  rabbitmq-data:

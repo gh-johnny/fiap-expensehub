@@ -82,6 +82,11 @@ coverage-integration: build ## Informational coverage of the integration suite (
 			-targetdir:artifacts/coverage/integration-report -reporttypes:"Html;TextSummary" \
 		&& head -20 artifacts/coverage/integration-report/Summary.txt'
 
+.PHONY: mutation
+mutation: build ## Mutation testing (Stryker.NET) of Core Reports/** with the unit suite; HTML in artifacts/mutation
+	$(DOTNET) bash -c '$(TOOLS) && cd sources/ExpenseHub.UnitTests \
+		&& dotnet stryker --config-file stryker-config.json --output /work/artifacts/mutation'
+
 .PHONY: demo
 demo: ## Run the HTTP demonstration (104 CP2 scenarios) against a disposable API and SQLite file
 	$(DOTNET) pwsh -NoProfile -File scripts/Invoke-ExpenseHubVerification.ps1
@@ -117,6 +122,66 @@ logs: ## Follow logs (SERVICE=api|worker|rabbitmq, default: all)
 restart: ## Restart one service: make restart SERVICE=worker
 	@test -n "$(SERVICE)" || (echo "Usage: make restart SERVICE=api|worker|rabbitmq" && exit 1)
 	$(COMPOSE) restart $(SERVICE)
+
+## Release (published images)
+
+RELEASE := $(COMPOSE) -f compose.release.yaml
+# Plain HTTP over bash /dev/tcp inside the API container (the same probe as its health check): no curl on the host.
+VERSION_PROBE := exec 3<>/dev/tcp/127.0.0.1/8080 && printf "GET /version HTTP/1.0\r\n\r\n" >&3 && tail -1 <&3
+
+.PHONY: release-pull
+release-pull: .env ## Pull the published images for IMAGE_TAG (set in .env)
+	$(RELEASE) pull
+
+.PHONY: release-up
+release-up: .env ## Start RabbitMQ + the published API and worker, waiting for health checks
+	$(RELEASE) up -d --wait
+
+.PHONY: release-ps
+release-ps: ## Show the release stack and the image of each container
+	$(RELEASE) ps --format 'table {{.Service}}\t{{.Image}}\t{{.Status}}'
+
+.PHONY: release-logs
+release-logs: ## Follow release logs (SERVICE=api|worker|rabbitmq, default: all)
+	$(RELEASE) logs -f --tail 100 $(SERVICE)
+
+.PHONY: release-stop-worker
+release-stop-worker: ## Stop only the worker (messages wait in the queue)
+	$(RELEASE) stop worker
+
+.PHONY: release-start-worker
+release-start-worker: ## Start the worker again
+	$(RELEASE) up -d --wait worker
+
+.PHONY: release-restart-worker
+release-restart-worker: ## Restart only the worker
+	$(RELEASE) restart worker
+
+.PHONY: release-recreate
+release-recreate: .env ## Recreate the API and worker containers; volumes (database, keys, broker) are kept
+	$(RELEASE) up -d --force-recreate --wait api worker
+
+.PHONY: release-version
+release-version: ## Show the commit served by /version and the revision label of both running containers
+	@printf '%-24s' "api GET /version"; $(RELEASE) exec -T api bash -c '$(VERSION_PROBE)'; echo
+	@for service in api worker; do \
+		printf '%-24s' "$$service label revision"; \
+		docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}  ({{ .Config.Image }})' \
+			"$$($(RELEASE) ps -q $$service)"; \
+	done
+
+EXPERIMENTS_IMAGE ?= docker:28.5.1-cli
+
+.PHONY: experiments
+experiments: release-up ## Run E01–E05 and the broker-outage diagnosis on the published images; report in artifacts/experiments
+	docker run --rm --network fiap-expensehub-release_default \
+		-v /var/run/docker.sock:/var/run/docker.sock -v "$(CURDIR)":"$(CURDIR)" -w "$(CURDIR)" \
+		-e HOST_UID=$(shell id -u) $(EXPERIMENTS_IMAGE) \
+		sh -c 'apk add --no-cache --quiet bash curl jq > /dev/null && bash scripts/run-experiments.sh'
+
+.PHONY: release-down
+release-down: ## Stop and remove the release containers; volumes are preserved
+	$(RELEASE) down
 
 .PHONY: shell
 shell: ## Interactive shell inside the SDK container

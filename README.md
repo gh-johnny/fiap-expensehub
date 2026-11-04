@@ -25,13 +25,14 @@ FIAP — C# Software Development · Professor Rafael Cassiolato · especificaç�
 5. [API — identidade e administração](#api--identidade-e-administração)
 6. [API — reembolsos e histórico](#api--reembolsos-e-histórico)
 7. [Relatórios em segundo plano (CP3)](#relatórios-em-segundo-plano-cp3)
-8. [Testes, cobertura e qualidade](#testes-cobertura-e-qualidade)
-9. [Matriz de testes](#matriz-de-testes)
-10. [Integração contínua](#integração-contínua)
-11. [Extras](#extras)
-12. [Andamento do CP3](#andamento-do-cp3)
-13. [Solução de problemas](#solução-de-problemas)
-14. [Entregas e referências](#entregas-e-referências)
+8. [Publicação e execução](#publicação-e-execução)
+9. [Testes, cobertura e qualidade](#testes-cobertura-e-qualidade)
+10. [Matriz de testes](#matriz-de-testes)
+11. [Integração contínua](#integração-contínua)
+12. [Extras](#extras)
+13. [Andamento do CP3](#andamento-do-cp3)
+14. [Solução de problemas](#solução-de-problemas)
+15. [Entregas e referências](#entregas-e-referências)
 
 ## Início rápido
 
@@ -83,7 +84,7 @@ Decisões principais:
   container (verificado com `docker compose up -d --force-recreate api`).
 - **Migrations no startup são opt-in** (`Database__ApplyMigrations=true` no Compose). Fora dos containers, use
   `make migration` e `dotnet ef database update`.
-- Imagens em versões fixas (`sdk:10.0.402`, `aspnet:10.0.13`, `rabbitmq:4.1.4-management`), usuário não root e
+- Imagens em versões fixas (`sdk:10.0.402`, `aspnet:10.0.14`, `runtime:10.0.14`, `rabbitmq:4.1.4-management`), usuário não root e
   health check próprio.
 
 ## Comandos
@@ -100,12 +101,20 @@ gerados nunca pertencem ao root) e o cache NuGet em `~/.nuget/packages`. `make h
 | `make test-unit` / `make test-integration` | Cada suíte isoladamente |
 | `make coverage` | Cobertura unitária com gate de **95 % de linhas e branches**; relatório em `artifacts/coverage/report/index.html` |
 | `make coverage-integration` | Cobertura informativa da suíte de integração |
+| `make mutation` | Testes de mutação (Stryker.NET) de `ExpenseHub.Core/Reports/**` com a suíte unitária; falha abaixo de 95 %; relatório em `artifacts/mutation/reports/mutation-report.html` |
 | `make demo` | Demonstração HTTP com 104 cenários do CP2 contra uma API e um SQLite descartáveis |
 | `make verify` | `build` + `format` + `coverage` + `test-integration` — obrigatório antes de todo PR |
 | `make env` | Cria `.env` a partir de `.env.example` com segredos aleatórios |
 | `make up` / `make down` | Sobe (com build) / derruba o ambiente; `down` preserva os volumes |
 | `make ps` / `make logs [SERVICE=api]` | Estado dos serviços / logs |
 | `make restart SERVICE=api` | Reinicia um serviço |
+| `make release-pull` / `make release-up` | Baixa / sobe as **imagens publicadas** do `IMAGE_TAG` (ver [Publicação e execução](#publicação-e-execução)) |
+| `make release-ps` / `make release-logs [SERVICE=worker]` | Estado (com a imagem de cada container) / logs do ambiente de release |
+| `make release-stop-worker` / `make release-start-worker` / `make release-restart-worker` | Para, religa ou reinicia só o worker |
+| `make release-recreate` | Recria API e worker **sem** remover volumes |
+| `make release-version` | Commit servido por `GET /version` e label `org.opencontainers.image.revision` dos dois containers |
+| `make release-down` | Derruba o ambiente de release; volumes preservados |
+| `make experiments` | Sobe o ambiente de release e roda E01–E05 + diagnóstico de broker fora; relatório em `artifacts/experiments/report.md` (ver [dossiê](docs/evidence/DOSSIE-CP3.md)) |
 | `make migration NAME=Nome` | Cria uma migration EF Core em `ExpenseHub.Core` |
 | `make shell` | Shell interativo no container do SDK |
 | `make clean` | Remove `bin/`, `obj/` e `artifacts/` (cache NuGet e volumes preservados) |
@@ -118,6 +127,7 @@ gerados nunca pertencem ao root) e o cache NuGet em `~/.nuget/packages`. `make h
 |---|---|
 | `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` | Única conta criada pelo seed (Admin). A senha segue as regras do Identity. |
 | `RABBITMQ_USER`, `RABBITMQ_PASSWORD` | Credenciais do broker, usadas por RabbitMQ, API e worker. |
+| `IMAGE_TAG` | SHA completo do commit publicado; usado só por `compose.release.yaml`. |
 | `API_PORT` | Porta do host para a API (padrão `5080`). |
 | `RABBITMQ_MANAGEMENT_PORT` | Porta do host para o painel do RabbitMQ (padrão `15672`). |
 
@@ -137,6 +147,7 @@ Configuração da aplicação (variáveis de ambiente no formato `Secao__Chave`)
 | `ReportProcessing__RetryDelay` | `00:00:05` | Pausa antes de devolver à fila uma mensagem com falha transitória |
 | `ReportProcessing__Prefetch` | `1` | Entregas sem `ack` mantidas pelo worker |
 | `ASPNETCORE_ENVIRONMENT` | `Development` no Compose | Habilita `/docs` e `/openapi/v1.json` |
+| `APP_VERSION` | `GIT_SHA` do build (`unknown` sem argumento, `local` no `compose.yaml`) | Commit exposto em `GET /version` e no log de início do worker |
 
 ## API — identidade e administração
 
@@ -206,6 +217,7 @@ Scalar (`/docs`) ou o arquivo `.http`.
   **inclusivos**, nunca a data de criação.
 - `scope`: `Mine` ou `Global` (sem diferenciar maiúsculas; valores numéricos como `"1"` são rejeitados). O
   solicitante vem **só do token**: não existe `ownerId` no contrato.
+- Permissão por perfil e escopo (veja abaixo): `Mine` exige Employee, `Global` exige Auditor.
 - Cada POST válido cria uma solicitação nova; não há deduplicação de cliente.
 
 Envelope (todas as rotas; instantes em UTC):
@@ -234,9 +246,31 @@ nunca recalculam, então alterar um reembolso depois da conclusão não muda o r
 período, instante de geração e a tabela `Status | Count | Amount` com os cinco estados e o total geral, em células
 numéricas. Gerada com ClosedXML (MIT) a partir do resultado persistido, sem nova mensagem na fila.
 
+**Autorização e isolamento (CP3-I02).** Solicitar depende do perfil e do escopo. Consultar depende só de quem criou
+a solicitação:
+
+| Perfil | `Mine` | `Global` | Listagem, detalhe e Excel |
+|---|---|---|---|
+| Employee | Sim | Não → 403 | Só as próprias |
+| Auditor | Não → 403 (salvo se também Employee) | Sim | Só as próprias. O privilégio global vale para os dados do relatório dele, não para as solicitações de outras pessoas |
+| Employee + Auditor | Sim | Sim | Só as próprias |
+| Admin, Approver ou Finance sem os perfis acima | 403 | 403 | Só as próprias (lista vazia; 404 para qualquer id) |
+
+- A regra fica em `ReportAuthorization` e roda em `ReportService.RequestAsync` **depois** da validação de entrada e
+  **antes** de gravar. Por isso entrada inválida responde 400 para qualquer perfil, e uma negação não grava nem
+  publica nada.
+- `POST /api/reports` também exige Employee ou Auditor no pipeline (`[Authorize(Roles)]`). Sem nenhum dos dois, o 403
+  sai antes do serviço com `code` `auth.forbidden`. Com um deles, mas sem o do escopo pedido, o 403 sai do serviço
+  com `report.scope_forbidden`.
+- Listagem, detalhe e Excel filtram pelo criador **no SQL** (`FindOwnedAsync`/`ListOwnedAsync`): solicitação alheia
+  responde 404, igual a uma inexistente, inclusive para Auditor e Admin.
+- O worker calcula com o solicitante e o escopo **gravados**. A mensagem carrega só o `reportId`. `Mine` filtra pelo
+  solicitante registrado, mesmo quando ele também é Auditor.
+
 | Cenário | Resposta |
 |---|---|
 | Sem autenticação | 401 |
+| Perfil sem permissão para o escopo pedido | 403 (`report.scope_forbidden`, ou `auth.forbidden` sem Employee nem Auditor); nada é gravado nem publicado |
 | Datas ausentes, inválidas ou invertidas; escopo inválido | 400 (`report.invalid_period` / `report.invalid_scope`), nada é gravado nem publicado |
 | Detalhe ou Excel inexistente ou de outro usuário | 404 (`report.not_found`) |
 | Excel de solicitação própria `Pending`, `Processing` ou `Failed` | 409 (`report.not_completed`) |
@@ -299,23 +333,104 @@ Verificado no Compose:
   `completedAt` e `generatedAt` ficam idênticos.
 - **Recriação:** depois de recriar API e worker, o mesmo token e o resultado anterior continuam válidos.
 
-> A matriz de perfil × escopo (`Mine` para Employee, `Global` para Auditor, demais → 403) chega com CP3-I02. Ver
-> [andamento](#andamento-do-cp3).
+Autorização verificada no Compose com duas contas Employee, uma Auditor e uma Approver, com reembolsos de R$ 100 e
+R$ 50 do Employee A e de R$ 200 do Employee B no período:
+- anônimo → 401;
+- Employee pedindo `Global` → 403 `report.scope_forbidden`; Auditor pedindo `Mine` → 403 `report.scope_forbidden`;
+  Approver pedindo `Mine` → 403 `auth.forbidden`;
+- Employee A pedindo `Mine` → 202, `Completed` com 2 / R$ 150 (sem o reembolso do Employee B);
+- Auditor pedindo `Global` → 202, `Completed` com 3 / R$ 350;
+- detalhe e Excel do relatório do Employee A pedidos pelo Auditor ou pelo Employee B → 404; o Employee A recebe 404
+  no detalhe do relatório do Auditor;
+- listagem do Employee B e do Admin → vazia; listagem do Auditor → só o próprio relatório.
+
+## Publicação e execução
+
+A versão entregue roda a partir de **duas imagens publicadas no GitHub Container Registry**, identificadas pelo
+commit:
+
+| Imagem | Referência |
+|---|---|
+| Aplicação web | `ghcr.io/gh-johnny/fiap-expensehub-api:<sha>` |
+| Worker | `ghcr.io/gh-johnny/fiap-expensehub-worker:<sha>` |
+
+`<sha>` é o SHA **completo** do commit. A tag `main` também é publicada por conveniência, mas a correção usa sempre o
+SHA. Os pacotes são **públicos**: `docker pull` funciona sem login e sem credenciais.
+
+**Publicação somente depois dos testes.** O workflow `release` (`.github/workflows/release.yml`) roda em todo push na
+`main` (ou manualmente): o job `verify` executa `make verify` (build, formatação, gate de cobertura e integração) e o
+job `publish` só começa se ele passar (`needs: verify`). Cada imagem é construída com `GIT_SHA=${{ github.sha }}`,
+publicada com atestado de proveniência e SBOM, e varrida pelo Trivy. O resumo do job lista as referências completas,
+os digests e o valor de `IMAGE_TAG`.
+
+**Identificação da versão.** Os Dockerfiles recebem `ARG GIT_SHA`, gravam o label OCI
+`org.opencontainers.image.revision` e exportam `APP_VERSION`. Em execução, a API responde `GET /version` (anônimo,
+tag `System`) com `{"commit":"<sha>"}` e o worker registra `ExpenseHub worker <sha> starting`. Assim a evidência
+mostra o que **rodou**, não só o que foi publicado.
+
+### Executar as imagens publicadas
+
+```shell
+make env                         # cria .env com senhas aleatórias (uma vez)
+# edite .env: IMAGE_TAG=<sha completo do resumo do workflow release>
+make release-pull                # docker compose -f compose.release.yaml pull
+make release-up                  # RabbitMQ + API + worker, aguardando os health checks
+make release-ps                  # imagem e estado de cada container
+make release-version             # /version e labels dos dois containers = IMAGE_TAG
+```
+
+`compose.release.yaml` (projeto `fiap-expensehub-release`) é o `compose.yaml` **sem `build:`**: as imagens vêm
+exclusivamente de `ghcr.io/...:${IMAGE_TAG}`. Sem `IMAGE_TAG`, o Compose falha com uma mensagem explícita, em vez de
+cair em `latest`. Os dois ambientes usam as mesmas portas do host; suba um de cada vez.
+
+| Aspecto | Como fica |
+|---|---|
+| Banco | SQLite em `/data/expensehub.db`, no volume `expensehub-data`, montado na API **e** no worker (mesmo arquivo, WAL). A API aplica as migrations no startup (`Database__ApplyMigrations=true`); o worker só sobe depois da API saudável. |
+| Autenticação | Chaves de Data Protection em `/data/keys`, no mesmo volume: os tokens continuam válidos após recriar os containers. |
+| RabbitMQ | `rabbitmq:4.1.4-management`, hostname fixo `expensehub-rabbitmq` e volume `rabbitmq-data`: a fila quorum durável e as mensagens sobrevivem a recriações. Painel em `http://127.0.0.1:15672`. |
+| Segredos | Só no `.env` (ignorado pelo Git), gerado por `make env`. `.env.example` e os arquivos Compose versionados não têm credenciais. |
+| Persistência | `make release-recreate` recria API e worker **sem** remover volumes. Nenhum target usa `down -v`. |
+
+Verificado localmente com as imagens construídas pelo mesmo Dockerfile: `/version`, os dois labels e o log do worker
+mostram o mesmo SHA; depois de `make release-recreate`, o token obtido antes continua respondendo 200.
 
 ## Testes, cobertura e qualidade
 
 | Suíte | Conteúdo | Comando |
 |---|---|---|
-| Unitária (`ExpenseHub.UnitTests`) | Regras de estado e autorização, validações, histórico, administração, adaptadores HTTP (controllers, ProblemDetails, auditoria) e contrato OpenAPI via `TestServer` em memória. Sem banco, rede ou broker. | `make test-unit` |
+| Unitária (`ExpenseHub.UnitTests`) | Regras de estado e autorização, validações, histórico, administração, relatórios (cálculo, autorização, worker, Excel), adaptadores HTTP e o pipeline HTTP real dos relatórios via `TestServer` em memória. Sem banco, rede ou broker. | `make test-unit` |
+| Mutação (Stryker.NET sobre a suíte unitária) | Altera o código de `ExpenseHub.Core/Reports/**` (operadores, condições, instruções, strings) e confere se algum teste unitário falha para cada mutante. | `make mutation` |
 | Integração (`ExpenseHub.IntegrationTests`) | SQLite real com migrations: seed idempotente, constraints, escopo SQL, concorrência entre contextos, rollback de roles, histórico e pagamento. | `make test-integration` |
 | HTTP (`scripts/Invoke-ExpenseHubVerification.ps1`) | 104 cenários contra a API real em SQLite descartável; relatórios sanitizados em `artifacts/demo/`. | `make demo` |
 
 **Gate de cobertura unitária:** ≥ 95 % de linhas **e** de branches no total da solução (`make coverage`; o build
-falha abaixo disso). Estado atual: **100 % de linhas e 97,2 % de branches** (Core: 100 % / 100 %), com 212 testes
-unitários e 14 de integração. As exclusões
-ficam declaradas só em `ExpenseHub.UnitTests.csproj`: migrations, código gerado, `Program.cs` (composition root,
-exercitado pelos smoke tests nos containers) e adaptadores de I/O real (`ExpenseHub.Core.Persistence`, RabbitMQ),
-cobertos pela suíte de integração. Métodos `async` **não** são excluídos.
+falha abaixo disso). Estado atual, com as seis frentes do CP3 integradas: **100 % de linhas e 97,4 % de branches**
+(Core: 100 % / 100 %), com 332 testes unitários e 14 de integração. As exclusões ficam declaradas só em `ExpenseHub.UnitTests.csproj`: migrations,
+código gerado, `Program.cs` (composition root, exercitado pelos smoke tests nos containers) e adaptadores de I/O
+real (`ExpenseHub.Core.Persistence`, RabbitMQ), cobertos pela suíte de integração. Métodos `async` **não** são
+excluídos.
+
+**Suíte unitária reproduzível (CP3-I04).** `make test-unit` executa `dotnet test
+sources/ExpenseHub.UnitTests/ExpenseHub.UnitTests.csproj` dentro do container do SDK. Não depende de banco,
+RabbitMQ, rede ou `.env`: store e publisher são *doubles* em memória, e os testes HTTP sobem a API num `TestServer`
+com um esquema de autenticação de teste. As novas regras de relatório ficam em quatro grupos:
+
+| Arquivo | O que prova |
+|---|---|
+| `Rubric/Cp3ScenarioTests` | Os nove cenários mínimos do contrato de testes do CP3, **um teste por cenário, com o mesmo nome** (`KnownDataAndInclusiveLimits`, `NoEligibleExpense`, `StartAfterEnd`, `EmployeeRequestsGlobal`, `ForeignRequest`, `SameMessageAgain`, `QueryAfterExpenseChanges`, `CompletedDownload`, `PendingFailedOrForeignDownload`). Cada um passa pelo serviço, pelo processador do worker e pelo Excel de verdade e confere efeitos: o que foi gravado, publicado, lido, calculado e escrito na planilha. |
+| `Api/ReportsHttpTests` | O pipeline HTTP real (`ApiHttpPipeline`, o mesmo que o `Program.cs` usa): roteamento, *model binding*, `[Authorize]`, handler de exceções e ProblemDetails. Cobre 401 em todas as rotas, 400 do *binding* e do serviço, 403 do serviço e do pipeline, 202 com `Location` ignorando um solicitante injetado no corpo, 404 alheio indistinguível de inexistente, 409, anexo `.xlsx`, 503 com `reportId` e o contrato de erro em 404/405. |
+| `Reports/ReportAuthorizationTests` | Matriz perfil × escopo e isolamento por solicitante (CP3-I02). |
+| `Reports/ReportInvariantTests` | Invariantes que só apareceram com os testes de mutação (abaixo). |
+
+**Testes de mutação.** Cobertura mostra o que foi executado; mutação mostra se os testes **pegam** um defeito.
+`make mutation` roda o Stryker.NET 5.0.0 no container, sobre `ExpenseHub.Core/Reports/**`, e falha abaixo de 95 %
+(`sources/ExpenseHub.UnitTests/stryker-config.json`). A primeira execução marcou **68,6 %**: dava para remover ou
+inverter o incremento de `Revision` (o token de concorrência) em cada transição do worker, apagar os logs
+correlacionados dos caminhos de falha, esvaziar as mensagens sanitizadas e remover os *guards* de nulo sem que nenhum
+teste falhasse. `ReportInvariantTests` fixa esses comportamentos. Score atual: **99,2 %** (120 mortos, 1 sobrevivente,
+35 que nem compilam e 23 ignorados pelo Stryker). O sobrevivente é equivalente: sem o
+`ThrowIfNull(actor)` de `RequestAsync`, a autorização lança o mesmo `ArgumentNullException` logo em seguida. O alvo
+não entra no `make verify` porque leva cerca de 2 minutos.
 
 **Qualidade:** `make quality` executa o mesmo script do workflow oficial `code-quality` (score atual 100/100). O
 workflow, `Directory.Build.props`, `.editorconfig` e os analisadores do professor não são alterados. O build local e
@@ -339,12 +454,17 @@ Cada requisito aponta para os testes que o comprovam. Linhas novas entram no mes
 | Contrato HTTP | Status por rota, `Location`, ProblemDetails com `code`/`traceId`, 500 sanitizado | `Api/ExpensesControllerTests`, `Api/ApiExceptionHandlerTests` | — | Todas as 13 rotas |
 | Auditoria | Log por requisição com método, rota, recurso, ator, `traceId` e status real | `Api/RequestAuditMiddlewareTests` | — | — |
 | OpenAPI | Bearer, tags, status documentados, exemplos, enum de estados, `decimal` | `Api/OpenApiDocumentTests` | — | Contrato OpenAPI |
+| Versão em execução | `APP_VERSION` vazio ou ausente → `unknown`, valor aparado; `GET /version` anônimo na tag `System` | `BuildInfoTests`, `Api/OpenApiDocumentTests` | — | `make release-version` |
 | Relatório — cálculo | Exemplo do professor (Mine 3 / R$ 175,00; Global 4 / R$ 375,00), limites inclusivos, Mine sem outros donos, cinco estados zerados, somas `decimal` exatas | `Reports/ReportCalculatorTests` | `RelationalReportTests` (mesmo filtro traduzido para SQL) | — |
 | Relatório — solicitação | Grava `Pending` com solicitante do token e publica uma vez; escopos válidos e inválidos (inclusive `"1"`); período invertido ou ausente → 400 sem gravar nem publicar; dia único válido; cada POST cria outro id | `Reports/ReportServiceTests` | `RelationalReportTests` (constraints de período e FK) | — |
 | Relatório — publicação | Sem confirmação → 503 com `reportId` persistido e `Pending`; banco fora antes de gravar → erro sem publicar; extensões no ProblemDetails | `Reports/ReportServiceTests`, `Api/ApiExceptionHandlerTests` | — | — |
 | Relatório — leitura | Lista só os próprios, mais recentes primeiro; detalhe alheio → 404; resultado persistido sem recálculo; erro sanitizado em `Failed` | `Reports/ReportServiceTests`, `Reports/ReportContractTests` | `RelationalReportTests` (consultas por dono em SQL, UTC) | — |
 | Relatório — Excel | `.xlsx` real (ZIP), metadados, cinco estados e total em células numéricas iguais ao resultado salvo; vazio com zeros; 409 fora de `Completed`; 404 alheio; nome `report-{id}.xlsx` | `Reports/ReportWorkbookTests`, `Reports/ReportServiceTests`, `Api/ReportsControllerTests` | — | — |
 | Mensagem | Corpo só com `reportId`; JSON inválido, vazio ou id zero rejeitados; campos extras (ex.: `ownerId`) ignorados | `Reports/ReportRequestedMessageTests` | — | — |
+| Relatório — autorização | 32 combinações de roles × `Mine`/`Global` contra uma tabela explícita (permitido grava e publica uma vez; negado → 403 `report.scope_forbidden` sem gravar nem publicar); 400 antes de 403; mensagem de negação sanitizada; solicitante do token e contrato sem campo de dono; Employees isolados entre si; Auditor, Admin, Approver e Finance sem acesso a solicitações alheias (lista, detalhe e Excel → 404); solicitante e escopo gravados guiam o worker (`Mine` de Employee + Auditor soma só os próprios) | `Reports/ReportAuthorizationTests`, `Api/OpenApiDocumentTests` | `RelationalReportTests` (consultas por dono em SQL) | — |
+| Relatório — cenários da rubrica | Um teste por cenário mínimo do CP3, com asserções de efeito (gravado, publicado, lido, calculado, planilha) | `Rubric/Cp3ScenarioTests` | — | — |
+| Relatório — pipeline HTTP | Status e `code` reais pelo pipeline do `Program.cs` (401, 400, 403, 202 + `Location`, 404, 409, 200 `.xlsx`, 503 + `reportId`, 405); solicitante injetado no corpo ignorado | `Api/ReportsHttpTests`, `Api/ApiHttpPipelineTests` | — | — |
+| Relatório — invariantes | `Revision` avança uma vez por transição gravada; escopo de log `ReportId`; logs correlacionados em toda falha; mensagens sanitizadas não vazias e sem detalhe da exceção; *guards* de nulo; valores padrão seguros | `Reports/ReportInvariantTests` | — | — |
 | Contrato HTTP de relatórios | 202 + `Location`, 503/409 documentados no OpenAPI, exemplos de corpo | `Api/ReportsControllerTests`, `Api/OpenApiDocumentTests` | — | — |
 | Worker — conclusão | `Pending` → `Processing` → `Completed` com resultado, `startedAt`, `completedAt`, `attempts`; dados lidos no processamento; escopo e solicitante persistidos | `Reports/ReportProcessorTests` | `RelationalReportProcessingTests` (estado e resultado no mesmo commit) | — |
 | Worker — idempotência | `Completed`/`Failed` reentregues sem novo efeito, inclusive com um processor novo (worker reiniciado); alteração posterior de reembolso não muda o salvo | `Reports/ReportProcessorTests` | `RelationalReportProcessingTests` | — |
@@ -361,6 +481,7 @@ Execução em matriz no CI: cada suíte roda em **Ubuntu, Windows e macOS** (ver
 | `code-quality` (`build.yml`, do professor, inalterado) | Build, Gitleaks e score de qualidade |
 | `ci` (`ci.yml`) | `make verify` no Ubuntu (gate de cobertura + resumo no job); matriz `{Unit, Integration} × {Ubuntu, Windows, macOS}`; build das imagens da API e do worker |
 | `expensehub-demo` (`demo.yml`) | Build, testes e os 104 cenários HTTP, com relatório como artefato |
+| `release` (`release.yml`) | Push na `main`: `make verify` e, só depois, publicação das duas imagens no GHCR por SHA, com proveniência, SBOM e Trivy |
 
 ## Extras
 
@@ -380,6 +501,12 @@ Além do exigido, sempre com um extra por entrega:
 | Exemplo do professor reproduzido em teste unitário **e** em SQL real | `ReportCalculatorTests`, `RelationalReportTests` |
 | Limite de tentativas persistido (`attempts`), classificação transitória × definitiva e corrida resolvida por token de revisão | `ReportProcessor`, `RelationalReportProcessingTests` |
 | Logs do worker com `[LoggerMessage]` (source generator) e escopo `ReportId` | `ReportConsumer`, `ReportProcessor` |
+| Testes de mutação (Stryker.NET, 99,2 % em `Reports/**`, gate de 95 %), que revelaram e fecharam lacunas que a cobertura de 100 % escondia | `make mutation`, `Reports/ReportInvariantTests` |
+| Pipeline HTTP compartilhado entre `Program.cs` e os testes, para que os testes HTTP em memória verifiquem a configuração real, não uma cópia | `ApiHttpPipeline`, `Api/ReportsHttpTests` |
+| Matriz de autorização de relatórios **exaustiva**: 32 combinações de roles × 2 escopos contra uma tabela explícita, e prova da solicitação até o cálculo do worker | `Reports/ReportAuthorizationTests` |
+| Imagens com SBOM e atestado de proveniência, e varredura Trivy que bloqueia a publicação em CRITICAL corrigível. A primeira varredura encontrou `GHSA-p3jp-9v83-76w9` (CVE-2026-111497, HIGH, decodificador Brotli) no runtime .NET 10.0.13; as imagens base passaram para 10.0.14 e a nova varredura não tem HIGH nem CRITICAL corrigíveis | `release.yml`, Dockerfiles |
+| Versão em execução verificável (`GET /version`, label OCI, log do worker) e `make release-version` sem ferramentas no host | `BuildInfo`, `Makefile` |
+| Experimentos E01–E05 e diagnóstico do broker fora automatizados, com PASS/FAIL por verificação, logs filtrados por `reportId` e sem segredos, rodando num container `docker:cli` (host continua só com git, Docker e make) | `make experiments`, `scripts/run-experiments.sh` |
 
 ## Andamento do CP3
 
@@ -387,15 +514,15 @@ Além do exigido, sempre com um extra por entrega:
 |---|---|---|---|
 | Fundação | Core compartilhado, containers, Makefile, cobertura, CI em matriz | João | Concluída (PR #2) |
 | [CP3-I01](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/11) | Contrato, cálculo, persistência, Excel e publicação confirmada | João | Concluída (PR #3) |
-| [CP3-I03](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/13) | Worker, ack após persistir, idempotência e falhas | João | Concluída neste PR |
-| [CP3-I02](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/12) | Autorização e isolamento | Matheus | Planejada — [plano](docs/plans/matheus-cp3-i02-i04.md#2-cp3-i02--autorização-e-isolamento) |
-| [CP3-I04](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/14) | Testes próprios significativos + mutação | Matheus | Planejada — [plano](docs/plans/matheus-cp3-i02-i04.md#3-cp3-i04--testes-próprios-significativos) |
-| [CP3-I05](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/15) | Imagens publicadas por commit, Compose de release, Trivy + SBOM | André | Planejada — [plano](docs/plans/andre-cp3-i05-i06.md#2-cp3-i05--publicação-e-execução-reproduzível) |
-| [CP3-I06](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/16) | Dossiê E01–E05, diagnóstico e `make experiments` | André | Planejada — [plano](docs/plans/andre-cp3-i05-i06.md#3-cp3-i06--experimentos-e-diagnóstico) |
+| [CP3-I03](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/13) | Worker, ack após persistir, idempotência e falhas | João | Concluída (PRs #4 e #6) |
+| [CP3-I02](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/12) | Autorização e isolamento | Matheus | Concluída (PR #7) — [plano](docs/plans/matheus-cp3-i02-i04.md#2-cp3-i02--autorização-e-isolamento) |
+| [CP3-I04](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/14) | Testes próprios significativos + mutação | Matheus | Concluída (PR #8) — [plano](docs/plans/matheus-cp3-i02-i04.md#3-cp3-i04--testes-próprios-significativos) |
+| [CP3-I05](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/15) | Imagens publicadas por commit, Compose de release, Trivy + SBOM | André | Concluída — [Publicação e execução](#publicação-e-execução) |
+| [CP3-I06](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/16) | Dossiê E01–E05, diagnóstico e `make experiments` | André | Dossiê e `make experiments` — [dossiê](docs/evidence/DOSSIE-CP3.md); execução final com as imagens publicadas e o CP3-I02 |
+| [CP3-I07](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/17) | Qualidade das alterações | Todos | Contínua (`make verify`, `make quality`) |
 
 Ordem de dependência: CP3-I02 antes do E04 (CP3-I06); CP3-I05 antes dos experimentos com imagens publicadas;
 CP3-I04 depois do CP3-I02.
-| [CP3-I07](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/17) | Qualidade das alterações | Todos | Contínua (`make verify`, `make quality`) |
 
 ## Solução de problemas
 
@@ -405,6 +532,8 @@ CP3-I04 depois do CP3-I02.
 | `port is already allocated` | Outra aplicação usa a porta. Ajuste `API_PORT` ou `RABBITMQ_MANAGEMENT_PORT` no `.env`. |
 | `set SEED_ADMIN_EMAIL in .env` ao subir | O `.env` não existe ou está incompleto: rode `make env`. |
 | `make quality` local com FIAP2102 em `.env` | O script também varre arquivos locais não versionados; o `.env` real (ignorado pelo Git) tem senhas. No CI ele não existe e o score é 100. |
+| `denied` no `docker pull` do GHCR | O pacote ainda está privado: em *Packages → fiap-expensehub-api / -worker → Package settings*, mude a visibilidade para *Public*. |
+| `manifest unknown` ou `IMAGE_TAG is missing a value` | `IMAGE_TAG` vazio ou diferente do SHA completo publicado: copie o valor do resumo do workflow `release`. |
 | Token deixou de valer | Mudança de roles exige novo login. Se os volumes foram removidos, as chaves e o banco foram recriados. |
 
 ## Entregas e referências

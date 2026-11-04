@@ -55,7 +55,7 @@ internal static class ApiDocumentation
             string tag = route.StartsWith("api/admin/", StringComparison.Ordinal) ? "Admin"
                 : route.StartsWith("api/expenses", StringComparison.Ordinal) ? (route.EndsWith("/history", StringComparison.Ordinal) ? "History" : "Expenses")
                 : route.StartsWith("api/reports", StringComparison.Ordinal) ? "Reports"
-                : route == "health" ? "System" : "Identity";
+                : route is "health" or "version" ? "System" : "Identity";
             operation.Tags = new HashSet<OpenApiTagReference> { new(tag, context.Document) };
             IList<object> metadata = context.Description.ActionDescriptor.EndpointMetadata;
             bool protectedOperation = metadata.OfType<IAuthorizeData>().Any() && !metadata.OfType<IAllowAnonymous>().Any();
@@ -131,6 +131,11 @@ internal static class ApiDocumentation
                         {
                             Summary = "Own reimbursements in an inclusive period (Employee)",
                             Value = JsonSerializer.SerializeToNode(new { fromDate = "2026-09-01", toDate = "2026-09-30", scope = "Mine" }),
+                        },
+                        ["global"] = new OpenApiExample
+                        {
+                            Summary = "Everyone's reimbursements in an inclusive period (Auditor)",
+                            Value = JsonSerializer.SerializeToNode(new { fromDate = "2026-09-01", toDate = "2026-09-30", scope = "Global" }),
                         },
                         ["invalid"] = new OpenApiExample
                         {
