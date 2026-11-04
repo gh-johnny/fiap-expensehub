@@ -1,0 +1,42 @@
+name: expensehub-demo
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  demo:
+    name: Build, tests & HTTP demonstration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERIFY_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - name: Checkout implementation SHA
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Verify with a disposable SQLite database
+        shell: pwsh
+        run: ./scripts/Invoke-ExpenseHubVerification.ps1 -CommitSha $env:VERIFY_SHA
+
+      - name: Upload sanitized demonstration reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: expensehub-demo-report
+          path: artifacts/demo/
+          if-no-files-found: warn
+          retention-days: 30

@@ -50,3 +50,8 @@ Desktop.ini
 appsettings.Development.json
 appsettings.Local.json
 secrets.json
+
+# ExpenseHub SQLite runtime state
+*.db
+*.db-wal
+*.db-shm
