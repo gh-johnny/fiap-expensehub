@@ -113,6 +113,7 @@ gerados nunca pertencem ao root) e o cache NuGet em `~/.nuget/packages`. `make h
 | `make release-recreate` | Recria API e worker **sem** remover volumes |
 | `make release-version` | Commit servido por `GET /version` e label `org.opencontainers.image.revision` dos dois containers |
 | `make release-down` | Derruba o ambiente de release; volumes preservados |
+| `make experiments` | Sobe o ambiente de release e roda E01–E05 + diagnóstico de broker fora; relatório em `artifacts/experiments/report.md` (ver [dossiê](docs/evidence/DOSSIE-CP3.md)) |
 | `make migration NAME=Nome` | Cria uma migration EF Core em `ExpenseHub.Core` |
 | `make shell` | Shell interativo no container do SDK |
 | `make clean` | Remove `bin/`, `obj/` e `artifacts/` (cache NuGet e volumes preservados) |
@@ -443,6 +444,7 @@ Além do exigido, sempre com um extra por entrega:
 | Logs do worker com `[LoggerMessage]` (source generator) e escopo `ReportId` | `ReportConsumer`, `ReportProcessor` |
 | Imagens com SBOM e atestado de proveniência, e varredura Trivy que bloqueia a publicação em CRITICAL corrigível. A primeira varredura encontrou `GHSA-p3jp-9v83-76w9` (CVE-2026-111497, HIGH, decodificador Brotli) no runtime .NET 10.0.13; as imagens base passaram para 10.0.14 e a nova varredura não tem HIGH nem CRITICAL corrigíveis | `release.yml`, Dockerfiles |
 | Versão em execução verificável (`GET /version`, label OCI, log do worker) e `make release-version` sem ferramentas no host | `BuildInfo`, `Makefile` |
+| Experimentos E01–E05 e diagnóstico do broker fora automatizados, com PASS/FAIL por verificação, logs filtrados por `reportId` e sem segredos, rodando num container `docker:cli` (host continua só com git, Docker e make) | `make experiments`, `scripts/run-experiments.sh` |
 
 ## Andamento do CP3
 
@@ -454,7 +456,7 @@ Além do exigido, sempre com um extra por entrega:
 | [CP3-I02](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/12) | Autorização e isolamento | Matheus | Planejada — [plano](docs/plans/matheus-cp3-i02-i04.md#2-cp3-i02--autorização-e-isolamento) |
 | [CP3-I04](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/14) | Testes próprios significativos + mutação | Matheus | Planejada — [plano](docs/plans/matheus-cp3-i02-i04.md#3-cp3-i04--testes-próprios-significativos) |
 | [CP3-I05](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/15) | Imagens publicadas por commit, Compose de release, Trivy + SBOM | André | Concluída — [Publicação e execução](#publicação-e-execução) |
-| [CP3-I06](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/16) | Dossiê E01–E05, diagnóstico e `make experiments` | André | Planejada — [plano](docs/plans/andre-cp3-i05-i06.md#3-cp3-i06--experimentos-e-diagnóstico) |
+| [CP3-I06](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/16) | Dossiê E01–E05, diagnóstico e `make experiments` | André | Dossiê e `make experiments` — [dossiê](docs/evidence/DOSSIE-CP3.md); execução final com as imagens publicadas e o CP3-I02 |
 | [CP3-I07](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/17) | Qualidade das alterações | Todos | Contínua (`make verify`, `make quality`) |
 
 Ordem de dependência: CP3-I02 antes do E04 (CP3-I06); CP3-I05 antes dos experimentos com imagens publicadas;
