@@ -518,7 +518,7 @@ Além do exigido, sempre com um extra por entrega:
 | [CP3-I02](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/12) | Autorização e isolamento | Matheus | Concluída (PR #7) — [plano](docs/plans/matheus-cp3-i02-i04.md#2-cp3-i02--autorização-e-isolamento) |
 | [CP3-I04](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/14) | Testes próprios significativos + mutação | Matheus | Concluída (PR #8) — [plano](docs/plans/matheus-cp3-i02-i04.md#3-cp3-i04--testes-próprios-significativos) |
 | [CP3-I05](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/15) | Imagens publicadas por commit, Compose de release, Trivy + SBOM | André | Concluída — [Publicação e execução](#publicação-e-execução) |
-| [CP3-I06](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/16) | Dossiê E01–E05, diagnóstico e `make experiments` | André | Dossiê e `make experiments` — [dossiê](docs/evidence/DOSSIE-CP3.md); execução final com as imagens publicadas e o CP3-I02 |
+| [CP3-I06](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/16) | Dossiê E01–E05, diagnóstico e `make experiments` | André | Concluída — [dossiê](docs/evidence/DOSSIE-CP3.md) com a execução nas imagens publicadas (38 de 38 verificações) em [`experiments-report.md`](docs/evidence/experiments-report.md) |
 | [CP3-I07](https://github.com/Racass/checkpoint-csharpracass-expensehub/issues/17) | Qualidade das alterações | Todos | Contínua (`make verify`, `make quality`) |
 
 Ordem de dependência: CP3-I02 antes do E04 (CP3-I06); CP3-I05 antes dos experimentos com imagens publicadas;

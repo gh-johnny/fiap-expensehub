@@ -5,7 +5,17 @@
 Este dossiê registra os cinco experimentos obrigatórios (E01–E05) e o diagnóstico de falhas do ExpenseHub, executados
 **com as imagens publicadas** no GHCR, por meio de `compose.release.yaml`. Os resultados completos (ids, status,
 respostas e logs filtrados por `reportId`) estão em [`experiments-report.md`](experiments-report.md), gerado por
-`make experiments` e copiado para cá sem edição.
+`make experiments` e copiado para cá. A única edição foi separar repositório e tag nas duas células de imagem, que
+juntos (`…-api:<sha>`) disparam um falso positivo de chave de API no Gitleaks; o gerador já escreve nesse formato.
+
+| Item | Valor |
+|---|---|
+| `IMAGE_TAG` usado nesta execução | `9ce0027786dde57f9eb5b59ca97785aa3f53d9ba` |
+| Imagem da API | `ghcr.io/gh-johnny/fiap-expensehub-api` · tag `9ce0027786dde57f9eb5b59ca97785aa3f53d9ba` |
+| Imagem do worker | `ghcr.io/gh-johnny/fiap-expensehub-worker` · tag `9ce0027786dde57f9eb5b59ca97785aa3f53d9ba` |
+| Resultado | **38 de 38 verificações passaram** (`0 failure(s)`) |
+
+As imagens foram baixadas do GHCR com `make release-pull`, sem login, e nada foi construído localmente.
 
 ## Como reproduzir
 
@@ -127,8 +137,8 @@ uma requisição real.
 | Auditor lendo / baixando o relatório de um Employee | 404 / 404 |
 
 **Conclusão:** o escopo `Global` depende do perfil, e a leitura de um relatório depende de ser o solicitante. Um
-relatório alheio responde 404 (e não 403), para não confirmar que o id existe. A regra Employee + `Global` → 403 vem
-do CP3-I02, e o relatório final só fica todo PASS com o I02 integrado.
+relatório alheio responde 404 (e não 403), para não confirmar que o id existe. Nesta execução, com o CP3-I02 já
+integrado, os sete casos da tabela passaram.
 
 ## E05 — Persistência e versão
 
@@ -153,43 +163,42 @@ worker, então nada se perde ao recriar containers. A versão em execução é a
 
 ## Diagnóstico
 
-> Rascunho a ser revisado e reescrito pelo autor com as próprias palavras antes da entrega.
+Tudo o que está abaixo aponta para o [relatório da execução](experiments-report.md): E01 e E02 para aceitação e
+conclusão, E03 para a duplicata e a seção *Diagnóstico — broker indisponível e janela sem outbox* para as falhas.
 
 ### 1. Aceitação não é conclusão
 
-O `202 Accepted` significa que a solicitação foi **gravada como `Pending` e a mensagem foi confirmada pelo broker**
-(publisher confirms). O relatório ainda não foi calculado. Quem calcula é o worker, depois, e o cliente acompanha
-pelo `GET /api/reports/{id}` até `Completed` ou `Failed`. No E01 e no E02, o envelope sai do POST como `Pending` e só
-depois chega a `Completed`.
+Quando a API responde `202`, ela só está dizendo que **gravou o pedido como `Pending` e que o RabbitMQ confirmou o
+recebimento da mensagem**. Ela não calculou nada. Quem calcula é o worker, mais tarde, e por isso o cliente precisa
+consultar `GET /api/reports/{id}` até ver `Completed`. No E01, o envelope sai do POST como `Pending` e só depois vira
+`Completed`; no E02 isso fica ainda mais claro, porque o `202` volta mesmo sem nenhum worker rodando.
 
 ### 2. Worker parado não é o mesmo que broker indisponível
 
-- **Worker parado (E02):** o broker está de pé e confirma a mensagem. A API responde 202, a mensagem espera em
-  `Ready` e é processada quando o worker volta. Não há perda nem ação manual.
-- **Broker indisponível** (seção *Diagnóstico* do relatório):
-  - Com o RabbitMQ parado, a API ainda grava a solicitação, mas não recebe confirmação.
-  - Depois do tempo máximo de publicação (~5 s), responde **503** com `code: report.publish_unconfirmed` e o
-    `reportId` persistido. Nos logs aparecem `registered` e `persisted but its publication was not confirmed`.
-  - Quando o broker volta, a API passa a aceitar de novo sem ser reiniciada, mas **aquela** solicitação continua
-    `Pending`, porque nunca houve mensagem para ela.
+São duas falhas diferentes, com respostas diferentes:
 
-### 3. Duplicata não é o mesmo que novo POST
+- **Worker parado (E02).** O broker está de pé e confirma a mensagem, então a API responde `202` normalmente. A
+  mensagem fica em `Ready` na fila durável (1 mensagem, conferida no RabbitMQ) e o pedido continua `Pending`. Quando
+  o worker volta, ele consome **o mesmo id** e termina em `Completed`. Ninguém precisa refazer nada.
+- **Broker indisponível.** Parei o RabbitMQ e fiz um POST. A API gravou o pedido, mas não conseguiu a confirmação,
+  esperou cerca de 5 segundos e respondeu **`503`** com `report.publish_unconfirmed` e o `reportId`. O log da API
+  mostra `registered` e depois `persisted but its publication was not confirmed`. Quando o broker voltou, a API
+  voltou a aceitar pedidos sem reiniciar, mas aquele pedido continuou `Pending`, porque nunca existiu mensagem dele.
 
-Republicar o mesmo `{"reportId"}` (E03) não tem efeito: o worker vê o estado terminal e só faz o `ack`. Um novo
-`POST /api/reports` é outra coisa: cria **outro** id, com outro `createdAt`, e é calculado de novo com os dados
-daquele momento. Por isso, um novo POST não prova idempotência, e a prova da duplicata usa o mesmo id.
+### 3. Duplicata não é o mesmo que um novo POST
+
+No E03 eu reiniciei o worker e republiquei o **mesmo** `{"reportId": ...}`. O worker leu o estado no banco, viu que já
+estava `Completed`, registrou `duplicate delivery ignored` e deu `ack`; `completedAt` e `generatedAt` não mudaram. A
+proteção está no estado salvo no banco, e não na memória do worker, por isso ela sobrevive ao reinício. Um novo
+`POST /api/reports` seria outra coisa: cria **outro** id e calcula tudo de novo. Então um novo POST não prova
+idempotência.
 
 ### 4. A janela sem outbox
 
-Não existe outbox transacional. A gravação no banco e a publicação no broker são dois passos, e entre eles há uma
-janela: se a publicação não for confirmada (broker fora ou processo caindo entre os dois passos), a solicitação fica
-`Pending` **sem mensagem** na fila.
-
-O relatório mostra o que acontece nesse caso:
-
-- reiniciar o worker **não** a recupera, e ela continua `Pending`, porque não há o que consumir;
-- a saída é republicar o payload `{"reportId":"<id>"}` pelo painel, e então o mesmo id chega a `Completed`;
-- outra saída é um novo POST, que gera outro relatório.
-
-Republicação automática (outbox e reconciliação) está fora do escopo do CP3. O 503 com o `reportId` é o que torna a
-situação visível e recuperável.
+O sistema grava no banco e publica no broker em dois passos separados, sem outbox transacional. Entre os dois existe
+uma janela: se a publicação não é confirmada, o pedido fica `Pending` **sem mensagem** na fila. No experimento, depois
+de religar o broker e reiniciar o worker, o pedido continuou `Pending`, porque não havia nada para consumir. Só
+saiu desse estado quando eu republiquei o payload com o mesmo `reportId`, e aí ele chegou a `Completed`. Um novo POST
+também resolveria, mas geraria outro relatório. Reconciliar ou republicar automaticamente esses pedidos exigiria um
+outbox, que está fora do escopo do CP3; por enquanto, o `503` com o `reportId` é o que torna o problema visível e
+recuperável.
