@@ -10,10 +10,16 @@ internal sealed class ListLogger<T> : ILogger<T>
 {
     public List<LogEntry> Entries { get; } = new();
 
+    public List<object> Scopes { get; } = new();
+
     public bool Enabled { get; set; } = true;
 
     public IDisposable? BeginScope<TState>(TState state)
-        where TState : notnull => null;
+        where TState : notnull
+    {
+        Scopes.Add(state);
+        return null;
+    }
 
     public bool IsEnabled(LogLevel logLevel) => Enabled;
 
