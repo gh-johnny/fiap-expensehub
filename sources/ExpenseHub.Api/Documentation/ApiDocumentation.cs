@@ -55,7 +55,7 @@ internal static class ApiDocumentation
             string tag = route.StartsWith("api/admin/", StringComparison.Ordinal) ? "Admin"
                 : route.StartsWith("api/expenses", StringComparison.Ordinal) ? (route.EndsWith("/history", StringComparison.Ordinal) ? "History" : "Expenses")
                 : route.StartsWith("api/reports", StringComparison.Ordinal) ? "Reports"
-                : route == "health" ? "System" : "Identity";
+                : route is "health" or "version" ? "System" : "Identity";
             operation.Tags = new HashSet<OpenApiTagReference> { new(tag, context.Document) };
             IList<object> metadata = context.Description.ActionDescriptor.EndpointMetadata;
             bool protectedOperation = metadata.OfType<IAuthorizeData>().Any() && !metadata.OfType<IAllowAnonymous>().Any();

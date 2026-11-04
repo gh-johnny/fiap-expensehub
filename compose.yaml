@@ -26,6 +26,8 @@ services:
     build:
       context: .
       dockerfile: sources/ExpenseHub.Api/Dockerfile
+      args:
+        GIT_SHA: local
     image: expensehub-api:local
     environment:
       ASPNETCORE_ENVIRONMENT: Development
@@ -48,6 +50,8 @@ services:
     build:
       context: .
       dockerfile: sources/ExpenseHub.Worker/Dockerfile
+      args:
+        GIT_SHA: local
     image: expensehub-worker:local
     environment:
       RabbitMq__Host: rabbitmq

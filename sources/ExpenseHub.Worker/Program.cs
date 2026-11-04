@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using ExpenseHub.Core;
 using ExpenseHub.Core.Messaging.RabbitMq;
 using ExpenseHub.Core.Persistence;
 using ExpenseHub.Core.Reports;
@@ -8,11 +9,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace ExpenseHub.Worker;
 
-internal static class Program
+internal static partial class Program
 {
     public static async Task Main(string[] args)
     {
@@ -29,6 +31,11 @@ internal static class Program
         builder.Services.AddHostedService<ReportConsumer>();
 
         using IHost host = builder.Build();
+        ILogger logger = host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("ExpenseHub.Worker");
+        LogStarting(logger, BuildInfo.Commit);
         await host.RunAsync();
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "ExpenseHub worker {Commit} starting")]
+    private static partial void LogStarting(ILogger logger, string commit);
 }
