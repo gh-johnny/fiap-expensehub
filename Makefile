@@ -165,6 +165,15 @@ release-version: ## Show the commit served by /version and the revision label of
 			"$$($(RELEASE) ps -q $$service)"; \
 	done
 
+EXPERIMENTS_IMAGE ?= docker:28.5.1-cli
+
+.PHONY: experiments
+experiments: release-up ## Run E01–E05 and the broker-outage diagnosis on the published images; report in artifacts/experiments
+	docker run --rm --network fiap-expensehub-release_default \
+		-v /var/run/docker.sock:/var/run/docker.sock -v "$(CURDIR)":"$(CURDIR)" -w "$(CURDIR)" \
+		-e HOST_UID=$(shell id -u) $(EXPERIMENTS_IMAGE) \
+		sh -c 'apk add --no-cache --quiet bash curl jq > /dev/null && bash scripts/run-experiments.sh'
+
 .PHONY: release-down
 release-down: ## Stop and remove the release containers; volumes are preserved
 	$(RELEASE) down
