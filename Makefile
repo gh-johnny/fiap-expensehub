@@ -82,6 +82,11 @@ coverage-integration: build ## Informational coverage of the integration suite (
 			-targetdir:artifacts/coverage/integration-report -reporttypes:"Html;TextSummary" \
 		&& head -20 artifacts/coverage/integration-report/Summary.txt'
 
+.PHONY: mutation
+mutation: build ## Mutation testing (Stryker.NET) of Core Reports/** with the unit suite; HTML in artifacts/mutation
+	$(DOTNET) bash -c '$(TOOLS) && cd sources/ExpenseHub.UnitTests \
+		&& dotnet stryker --config-file stryker-config.json --output /work/artifacts/mutation'
+
 .PHONY: demo
 demo: ## Run the HTTP demonstration (104 CP2 scenarios) against a disposable API and SQLite file
 	$(DOTNET) pwsh -NoProfile -File scripts/Invoke-ExpenseHubVerification.ps1

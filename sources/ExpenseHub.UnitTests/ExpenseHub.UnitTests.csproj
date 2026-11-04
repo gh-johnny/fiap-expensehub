@@ -35,6 +35,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ExpenseHub.Api\ExpenseHub.Api.csproj" />
+    <ProjectReference Include="..\ExpenseHub.Core\ExpenseHub.Core.csproj" />
   </ItemGroup>
 
 </Project>
