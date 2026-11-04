@@ -3,7 +3,7 @@
 #   docker build -f sources/ExpenseHub.Worker/Dockerfile .
 
 ARG SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0.402
-ARG RUNTIME_IMAGE=mcr.microsoft.com/dotnet/runtime:10.0.13
+ARG RUNTIME_IMAGE=mcr.microsoft.com/dotnet/runtime:10.0.14
 
 FROM ${SDK_IMAGE} AS build
 WORKDIR /src
