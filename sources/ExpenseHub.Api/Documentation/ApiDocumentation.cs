@@ -132,6 +132,11 @@ internal static class ApiDocumentation
                             Summary = "Own reimbursements in an inclusive period (Employee)",
                             Value = JsonSerializer.SerializeToNode(new { fromDate = "2026-09-01", toDate = "2026-09-30", scope = "Mine" }),
                         },
+                        ["global"] = new OpenApiExample
+                        {
+                            Summary = "Everyone's reimbursements in an inclusive period (Auditor)",
+                            Value = JsonSerializer.SerializeToNode(new { fromDate = "2026-09-01", toDate = "2026-09-30", scope = "Global" }),
+                        },
                         ["invalid"] = new OpenApiExample
                         {
                             Summary = "fromDate after toDate returns 400 and queues nothing",
