@@ -30,6 +30,12 @@ public interface IReportStore
     /// <returns>The request, or null for both absent and foreign requests.</returns>
     Task<ReportRequest?> FindOwnedAsync(Guid id, string requesterId, CancellationToken cancellationToken);
 
+    /// <summary>Loads a tracked request for the worker, regardless of requester; the message only carries its id.</summary>
+    /// <param name="id">The request identifier.</param>
+    /// <param name="cancellationToken">Processing cancellation.</param>
+    /// <returns>The request, or null when absent.</returns>
+    Task<ReportRequest?> LoadForProcessingAsync(Guid id, CancellationToken cancellationToken);
+
     /// <summary>Reads, at processing time, the status and amount of the expenses eligible for the persisted request.</summary>
     /// <param name="report">The persisted request; its period, scope and requester drive the SQL filter.</param>
     /// <param name="cancellationToken">Processing cancellation.</param>
