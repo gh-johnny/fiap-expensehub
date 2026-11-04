@@ -1,5 +1,6 @@
 using System;
 using ExpenseHub.Core.Models;
+using ExpenseHub.Core.Reports;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -27,6 +28,9 @@ public sealed class ExpenseHubDbContext : IdentityDbContext<IdentityUser>
 
     /// <summary>Gets unique expense payments.</summary>
     public DbSet<PaymentRecord> PaymentRecords => Set<PaymentRecord>();
+
+    /// <summary>Gets report requests and their persisted results.</summary>
+    public DbSet<ReportRequest> ReportRequests => Set<ReportRequest>();
 
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder builder)
@@ -85,6 +89,31 @@ public sealed class ExpenseHubDbContext : IdentityDbContext<IdentityUser>
             entity.HasOne<IdentityUser>().WithMany().HasForeignKey(payment => payment.ActorId)
                 .OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(payment => payment.ExpenseId).IsUnique();
+        });
+
+        builder.Entity<ReportRequest>(entity =>
+        {
+            entity.ToTable("ReportRequests", table =>
+            {
+                table.HasCheckConstraint("CK_ReportRequests_Status", "Status IN ('Pending', 'Processing', 'Completed', 'Failed')");
+                table.HasCheckConstraint("CK_ReportRequests_Scope", "Scope IN ('Mine', 'Global')");
+                table.HasCheckConstraint("CK_ReportRequests_Period", "FromDate <= ToDate");
+            });
+            entity.Property(report => report.RequesterId).IsRequired();
+            entity.Property(report => report.Scope).HasConversion<string>().HasMaxLength(8);
+            entity.Property(report => report.Status).HasConversion<string>().HasMaxLength(16);
+            entity.Property(report => report.ErrorCode).HasMaxLength(64);
+            entity.Property(report => report.ErrorMessage).HasMaxLength(500);
+            entity.Property(report => report.Revision).IsConcurrencyToken();
+            entity.Property(report => report.CreatedAtUtc).HasConversion(
+                instant => instant, instant => DateTime.SpecifyKind(instant, DateTimeKind.Utc));
+            entity.Property(report => report.StartedAtUtc).HasConversion(
+                instant => instant, instant => instant.HasValue ? DateTime.SpecifyKind(instant.Value, DateTimeKind.Utc) : null);
+            entity.Property(report => report.CompletedAtUtc).HasConversion(
+                instant => instant, instant => instant.HasValue ? DateTime.SpecifyKind(instant.Value, DateTimeKind.Utc) : null);
+            entity.HasOne<IdentityUser>().WithMany().HasForeignKey(report => report.RequesterId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(report => new { report.RequesterId, report.CreatedAtUtc });
         });
     }
 }
