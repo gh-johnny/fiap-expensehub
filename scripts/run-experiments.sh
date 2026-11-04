@@ -151,7 +151,9 @@ VERSION="$(body .commit)"
   echo "| Período dos relatórios | \`$FROM\` a \`$TODAY\` |"
 } > "$REPORT"
 for service in api worker; do
-  md "| Imagem \`$service\` | \`$(docker inspect --format '{{.Config.Image}}' "$("${COMPOSE[@]}" ps -q "$service")")\` |"
+  # Repository and tag in separate code spans: "…-api:<40 hex>" trips Gitleaks' generic-api-key rule.
+  image="$(docker inspect --format '{{.Config.Image}}' "$("${COMPOSE[@]}" ps -q "$service")")"
+  md "| Imagem \`$service\` | \`${image%:*}\` · tag \`${image##*:}\` |"
 done
 
 EMPLOYEE="$(account employee-a Employee)"
