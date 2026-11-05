@@ -540,16 +540,23 @@ CP3-I04 depois do CP3-I02.
 
 - **CP2:** implementação integrada pelo PR #1 deste repositório e marcada pela tag `cp2-final`, que é o commit base
   evoluído pelo CP3. Issues cobertas: Racass/checkpoint-csharpracass-expensehub#1 a #10.
-- **CP3:** o commit final é registrado aqui quando a última frente for integrada.
+- **CP3:** entrega final marcada pela tag `cp3-final`, que aponta para o commit que contém este registro. Esse SHA
+  é o `IMAGE_TAG` das imagens publicadas pelo workflow `release`. Issues cobertas:
+  Racass/checkpoint-csharpracass-expensehub#11 a #17, sem fechar as originais.
+- **Imagens (públicas, `docker pull` sem login):** `ghcr.io/gh-johnny/fiap-expensehub-api` e
+  `ghcr.io/gh-johnny/fiap-expensehub-worker`, com a tag igual ao SHA completo de `cp3-final`
+  (`git rev-parse cp3-final^{commit}`).
+- **Evidências:** os experimentos E01–E05 rodaram nas imagens publicadas do commit `9ce0027`. Os commits seguintes até
+  `cp3-final` só alteram documentação e o formato do relatório gerado, sem mudar o código das imagens.
 
 Checklist de entrega do CP3 (envio no Teams):
 
-- [ ] Repositório, integrantes e RMs; commit do CP2 (`cp2-final`) e SHA final do CP3
-- [ ] Referências completas das duas imagens (`ghcr.io/…:<sha>`) e acesso público para `docker pull`
-- [ ] `compose.release.yaml` + `.env.example` + passos de inicialização (este README)
-- [ ] Arquivo `.http` sem tokens cobrindo solicitações, consultas e download do Excel
-- [ ] Comando e resultado dos testes próprios (`make test-unit`, `make coverage`), separados dos experimentos
-- [ ] Dossiê E01–E05 e diagnóstico (`docs/evidence/DOSSIE-CP3.md`)
+- [x] Repositório, integrantes e RMs; commit do CP2 (`cp2-final`) e commit final do CP3 (`cp3-final`)
+- [x] Referências completas das duas imagens e acesso público para `docker pull`
+- [x] `compose.release.yaml` + `.env.example` + passos de inicialização (este README)
+- [x] Arquivo `.http` sem tokens cobrindo solicitações, consultas e download do Excel
+- [x] Comando e resultado dos testes próprios (`make test-unit`, `make coverage`), separados dos experimentos
+- [x] Dossiê E01–E05 e diagnóstico (`docs/evidence/DOSSIE-CP3.md`)
 - [ ] Código compactado, se pedido: só fontes e configuração de exemplo (sem `bin/`, `obj/`, `.env`, bancos)
 - [ ] LinkedIn: cada integrante envia o próprio link, com texto próprio
 - Documentos do professor herdados do template: [enunciado](docs/ENUNCIADO.md), [requisitos](docs/REQUISITOS.md),
